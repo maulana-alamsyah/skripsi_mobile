@@ -1,15 +1,10 @@
 import 'dart:io';
-import 'dart:isolate';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:pregfit/Controller/notification_controller.dart';
 import 'package:responsive_sizer/responsive_sizer.dart';
 import 'Screens/Onboarding/onboarding.dart';
-import 'package:alarm/alarm.dart';
-import 'package:awesome_notifications/awesome_notifications.dart';
-import 'package:http/http.dart' as http;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,10 +34,11 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ResponsiveSizer(builder: (context, orientation, screenType) {
-      return const MaterialApp(
+      return MaterialApp(
+        navigatorKey: navigatorKey,
         title: 'Preg-Fit',
         debugShowCheckedModeBanner: false,
-        home: Onboarding(),
+        home: const Onboarding(),
       );
     });
   }

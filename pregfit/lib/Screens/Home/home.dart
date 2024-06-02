@@ -11,7 +11,6 @@ import 'package:rflutter_alert/rflutter_alert.dart';
 import 'package:responsive_sizer/responsive_sizer.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:camera/camera.dart';
-import 'package:pregfit/Screens/Onboarding/onboarding.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -63,7 +62,6 @@ class _HomeState extends State<Home> {
       }
     } catch (e) {
       if (e is SocketException) {
-        print('Network error: ${e.message}');
         if (mounted) {
           Alert(
             context: context,

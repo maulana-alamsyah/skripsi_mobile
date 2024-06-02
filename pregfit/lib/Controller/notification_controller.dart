@@ -3,10 +3,7 @@ import 'dart:isolate';
 import 'dart:ui';
 
 import 'package:awesome_notifications/awesome_notifications.dart';
-import 'package:awesome_notifications/awesome_notifications_web.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 
 import '../main.dart';
 
@@ -18,6 +15,7 @@ class NotificationController {
   ///  *********************************************
   ///
   static Future<void> initializeLocalNotifications() async {
+    await AwesomeNotifications().requestPermissionToSendNotifications();
     await AwesomeNotifications().initialize(
         null, //'resource://drawable/res_app_icon',//
         [
@@ -191,6 +189,7 @@ class NotificationController {
     await AwesomeNotifications().createNotification(
         content: NotificationContent(
             id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+            summary: 'asd',
             channelKey: 'pregfit_notification',
             title: 'Huston! The eagle has landed!',
             body:
@@ -217,6 +216,7 @@ class NotificationController {
 
   static Future<void> createNewWeeklyReminder({
     required int id,
+    required String summary,
     required int weekday,
     required int hour,
     required int minute,
@@ -234,11 +234,11 @@ class NotificationController {
           minute: minute,
           second: 0,
           repeats: true,
-          timeZone: localTimeZone
-          // allowWhileIdle: true,
-          ),
+          timeZone: localTimeZone,
+          allowWhileIdle: true),
       content: NotificationContent(
         id: id,
+        summary: summary,
         channelKey: 'pregfit_notification',
         title: 'Waktunya Yoga Mom!',
         body: "Ayo buka aplikasi Preg-Fit dan lakukan yoga hamil mom.",
@@ -266,6 +266,7 @@ class NotificationController {
 
   static Future<void> createNewDailyReminder({
     required int id,
+    required String summary,
     required int hour,
     required int minute,
   }) async {
@@ -277,15 +278,16 @@ class NotificationController {
 
     await AwesomeNotifications().createNotification(
       schedule: NotificationCalendar(
-          // weekday: weekday,
-          hour: hour,
-          minute: minute,
-          second: 0,
-          repeats: true,
-          timeZone: localTimeZone
-          //allowWhileIdle: true,
-          ),
+        // weekday: weekday,
+        hour: hour,
+        minute: minute,
+        second: 0,
+        repeats: true,
+        timeZone: localTimeZone,
+        allowWhileIdle: true,
+      ),
       content: NotificationContent(
+        summary: summary,
         id: id,
         channelKey: 'pregfit_notification',
         title: 'Waktunya Yoga Mom!',

@@ -1,33 +1,41 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:date_field/date_field.dart';
 import 'package:dropdown_textfield/dropdown_textfield.dart';
 import 'package:easy_loading_button/easy_loading_button.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:jwt_decoder/jwt_decoder.dart';
-import 'package:pregfit/Config/config.dart';
-import 'package:pregfit/Screens/Pengingat/pengingat.dart';
+import 'package:pregfit/Controller/notification_controller.dart';
 import 'package:responsive_sizer/responsive_sizer.dart';
 import 'package:rflutter_alert/rflutter_alert.dart';
 import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart'
     as keyboard;
 
 class UbahPengingat extends StatefulWidget {
-  const UbahPengingat({super.key});
+  final int id;
+  const UbahPengingat({super.key, required this.id});
 
   @override
   State<UbahPengingat> createState() => _UbahPengingatState();
 }
 
 class _UbahPengingatState extends State<UbahPengingat> {
-  TextEditingController _controllerName = TextEditingController();
-  TextEditingController _controllerJam = TextEditingController();
+  final TextEditingController _controllerName = TextEditingController();
   bool _submitted = false;
   StreamSubscription<bool>? _keyboardVisibilitySubscription;
   bool isKeyboardVisible = false;
   late SingleValueDropDownController _cnt;
+  late NotificationModel notification;
+  DateTime scheduledDateTime = DateTime.now();
+  late String summary;
+  late DropDownValueModel dropdownInitialValue =
+      const DropDownValueModel(name: 'Harian', value: 'Harian');
+  late String name = '';
+  final _formKey = GlobalKey<FormState>();
+  bool _initialized = false;
 
   DateTime? selectedDate;
   String? dropdownValue;
@@ -89,187 +97,143 @@ class _UbahPengingatState extends State<UbahPengingat> {
   @override
   void dispose() {
     _cnt.dispose();
+    _controllerName.dispose();
     _keyboardVisibilitySubscription?.cancel();
     super.dispose();
   }
 
-  Future<dynamic> getUser() async {
-    // var token = box.read('token');
-    var token = "test";
-    try {
-      final request =
-          await client.getUrl(Uri.parse("${Config.baseURL}/api/users"));
-      request.headers.set(
-          HttpHeaders.contentTypeHeader, "application/json; charset=UTF-8");
-      request.headers.set(HttpHeaders.authorizationHeader, "Bearer $token");
+  Future<NotificationModel> _fetchActiveNotifications() async {
+    List<NotificationModel> notifications =
+        await AwesomeNotifications().listScheduledNotifications();
 
-      final response = await request.close();
-
-      if (response.statusCode == 200) {
-        return jsonDecode(await response.transform(utf8.decoder).join());
-      } else if (response.statusCode == 401) {
-        // _signOut();
-        // Navigator.pushReplacement(context,
-        //     MaterialPageRoute(builder: (context) => const Onboarding()));
+    for (NotificationModel notification in notifications) {
+      if (notification.content?.id == widget.id) {
+        return notification;
       }
-    } catch (e) {
-      if (e is SocketException) {
-        // Handle the SocketException (e.g., display an error message)
-        print('Network error: ${e.message}');
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
+    }
+
+    return NotificationModel();
+  }
+
+  Future<dynamic> updateNotification(
+      String nama, DateTime tanggal, String frekuensi) async {
+    // var token = box.read('token');
+    // var token = "test";
+    // var id = DateTime.now().millisecondsSinceEpoch.remainder(100000);
+    var weekday = tanggal.weekday;
+    var hour = tanggal.hour;
+    var minute = tanggal.minute;
+
+    if (widget.id != 0) {
+      try {
+        await AwesomeNotifications().cancel(widget.id);
+        if (frekuensi == 'Harian') {
+          await NotificationController.createNewDailyReminder(
+              id: widget.id, summary: nama, hour: hour, minute: minute);
+        } else if (frekuensi == 'Mingguan') {
+          await NotificationController.createNewWeeklyReminder(
+              id: widget.id,
+              summary: nama,
+              weekday: weekday,
+              hour: hour,
+              minute: minute);
         }
-      } else {
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
+      } catch (e) {
+        if (e is SocketException) {
+          // Handle the SocketException (e.g., display an error message)
+          if (mounted) {
+            Alert(
+              context: context,
+              type: AlertType.error,
+              style: alertStyle,
+              title: 'Error',
+              desc: "Tidak dapat terhubung dengan server",
+              buttons: [
+                DialogButton(
+                  onPressed: () => Navigator.pop(context),
+                  color: Colors.blue,
+                  child: const Text(
+                    "Oke",
+                    style: TextStyle(color: Colors.white, fontSize: 20),
+                  ),
+                )
+              ],
+            ).show();
+          }
+        } else {
+          if (mounted) {
+            Alert(
+              context: context,
+              type: AlertType.error,
+              style: alertStyle,
+              title: 'Error',
+              desc: "Tidak dapat terhubung dengan server",
+              buttons: [
+                DialogButton(
+                  onPressed: () => Navigator.pop(context),
+                  color: Colors.blue,
+                  child: const Text(
+                    "Oke",
+                    style: TextStyle(color: Colors.white, fontSize: 20),
+                  ),
+                )
+              ],
+            ).show();
+          }
         }
       }
     }
   }
 
-  Future<dynamic> updatePengingat(
-      String nama, String tanggal, String jam) async {
+  Future<dynamic> deleteNotification() async {
     // var token = box.read('token');
-    var token = "test";
+    // var token = "test";
+    // var id = DateTime.now().millisecondsSinceEpoch.remainder(100000);
 
-    Map<String, dynamic> decodedToken = JwtDecoder.decode(token);
-    String no_hp = decodedToken['no_hp'];
-    print(json.encode({
-      'no_hp': no_hp,
-      'jam': jam,
-      'nama': nama,
-      'tanggal_pengingat': tanggal
-    }));
-
-    try {
-      final request =
-          await client.putUrl(Uri.parse("${Config.baseURL}/api/users"));
-      request.headers.set(
-          HttpHeaders.contentTypeHeader, "application/json; charset=UTF-8");
-      request.headers.set(HttpHeaders.authorizationHeader, "Bearer $token");
-      // if (usiaKandungan != 'null') {
-      //   print('this if');
-      // //   final requestBodyBytes = utf8.encode(json.encode({
-      // //     'no_hp': no_hp,
-      // //     'email': email,
-      // //     'nama': nama,
-      // //     'usia_kandungan': usiaKandungan,
-      // //     'tanggal_pengingat': tanggal
-      // //   }));
-
-      //   request.headers
-      //       .set('Content-Length', requestBodyBytes.length.toString());
-      //   request.write(json.encode({
-      //     'no_hp': no_hp,
-      //     'email': email,
-      //     'nama': nama,
-      //     'usia_kandungan': usiaKandungan,
-      //     'tanggal_pengingat': tanggal
-      //   }));
-      // } else {
-      //   print('this else');
-      //   final requestBodyBytes = json.encode({
-      //     'no_hp': no_hp,
-      //     'email': email,
-      //     'nama': nama,
-      //     'usia_kandungan': 'null',
-      //     'tanggal_pengingat': tanggal
-      //   });
-
-      //   request.headers
-      //       .set('Content-Length', requestBodyBytes.length.toString());
-      //   request.write(json.encode({
-      //     'no_hp': no_hp,
-      //     'email': email,
-      //     'nama': nama,
-      //     'usia_kandungan': 'null',
-      //     'tanggal_pengingat': tanggal
-      //   }));
-      // }
-
-      final response = await request.close();
-
-      if (response.statusCode == 200) {
-        return jsonDecode(await response.transform(utf8.decoder).join());
-      } else if (response.statusCode == 401) {
-        // _signOut();
-        // Navigator.pushReplacement(
-        //     context, MaterialPageRoute(builder: (context) => const Onboarding()));
-      }
-    } catch (e) {
-      if (e is SocketException) {
-        // Handle the SocketException (e.g., display an error message)
-        print('Network error: ${e.message}');
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
-        }
-      } else {
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
+    if (widget.id != 0) {
+      try {
+        await AwesomeNotifications().cancel(widget.id);
+      } catch (e) {
+        if (e is SocketException) {
+          if (mounted) {
+            Alert(
+              context: context,
+              type: AlertType.error,
+              style: alertStyle,
+              title: 'Error',
+              desc: "Tidak dapat terhubung dengan server",
+              buttons: [
+                DialogButton(
+                  onPressed: () => Navigator.pop(context),
+                  color: Colors.blue,
+                  child: const Text(
+                    "Oke",
+                    style: TextStyle(color: Colors.white, fontSize: 20),
+                  ),
+                )
+              ],
+            ).show();
+          }
+        } else {
+          if (mounted) {
+            Alert(
+              context: context,
+              type: AlertType.error,
+              style: alertStyle,
+              title: 'Error',
+              desc: "Tidak dapat terhubung dengan server",
+              buttons: [
+                DialogButton(
+                  onPressed: () => Navigator.pop(context),
+                  color: Colors.blue,
+                  child: const Text(
+                    "Oke",
+                    style: TextStyle(color: Colors.white, fontSize: 20),
+                  ),
+                )
+              ],
+            ).show();
+          }
         }
       }
     }
@@ -287,24 +251,11 @@ class _UbahPengingatState extends State<UbahPengingat> {
               onPressed: () async {
                 setState(() => _submitted = true);
                 try {
-                  if (_errorTextNama == null &&
-                      _errorTextJam == null &&
-                      _controllerName.value.text.isNotEmpty &&
-                      _controllerJam.value.text.isNotEmpty) {
-                    await updatePengingat(
-                        _controllerName.text,
-                        DateFormat('dd/MM/yyyy').format(selectedDate != null
-                            ? selectedDate!
-                            : (snapshotData['tanggal_pengingat'] != null
-                                ? DateTime.tryParse(
-                                        snapshotData['tanggal_pengingat']) ??
-                                    DateTime.now()
-                                : DateTime.now())),
-                        _controllerJam.text);
-                    Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const Pengingat()));
+                  if (_formKey.currentState!.validate()) {
+                    await updateNotification(
+                        name, scheduledDateTime, dropdownInitialValue.value);
+                    Navigator.pop(context);
+                    Navigator.pop(context, true);
                   } else {
                     Alert(
                       context: context,
@@ -357,8 +308,8 @@ class _UbahPengingatState extends State<UbahPengingat> {
             ),
             DialogButton(
               onPressed: () {
-                Navigator.pushReplacement(context,
-                    MaterialPageRoute(builder: (context) => const Pengingat()));
+                Navigator.pop(context);
+                Navigator.pop(context);
               },
               color: Colors.red,
               child: const Text(
@@ -374,16 +325,50 @@ class _UbahPengingatState extends State<UbahPengingat> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
-        future: getUser(),
+        future: _fetchActiveNotifications(),
         builder: (context, snapshot) {
           if (snapshot.hasData) {
-            _controllerName.text = _controllerName.text.isEmpty
-                ? (snapshot.data['nama'] ?? '')
-                : _controllerName.text;
-            _controllerJam.text = _controllerJam.text.isEmpty
-                ? (snapshot.data['jam'] ?? '')
-                : _controllerJam.text;
+            NotificationModel? notification = snapshot.data;
+            if (!_initialized) {
+              if (notification?.schedule != null) {
+                NotificationCalendar schedule =
+                    notification!.schedule as NotificationCalendar;
 
+                int year = schedule.year ?? DateTime.now().year;
+                int month = schedule.month ?? DateTime.now().month;
+                int day = schedule.day ?? DateTime.now().day;
+                int hour = schedule.hour ?? 0;
+                int minute = schedule.minute ?? 0;
+                int second = schedule.second ?? 0;
+
+                scheduledDateTime =
+                    DateTime(year, month, day, hour, minute, second);
+
+                if (DateTime.now().isAfter(scheduledDateTime)) {
+                  scheduledDateTime =
+                      scheduledDateTime.add(const Duration(days: 1));
+                }
+
+                name = notification.content?.summary ?? '';
+
+                if (schedule.weekday != null && schedule.weekday != 0) {
+                  dropdownInitialValue = const DropDownValueModel(
+                    name: 'Mingguan',
+                    value: "Mingguan",
+                  );
+                } else {
+                  dropdownInitialValue = const DropDownValueModel(
+                    name: 'Harian',
+                    value: "Harian",
+                  );
+                }
+                // _initialized = true;
+              } else {
+                name = "";
+                scheduledDateTime = DateTime.now();
+              }
+              _initialized = true;
+            }
             return WillPopScope(
                 onWillPop: () => _onWillPop(snapshot.data),
                 child: Scaffold(
@@ -405,203 +390,199 @@ class _UbahPengingatState extends State<UbahPengingat> {
                     body: Center(
                       child: SizedBox(
                         width: Adaptive.w(90),
-                        child: Column(
-                          children: <Widget>[
-                            ConstrainedBox(
-                              constraints: isKeyboardVisible
-                                  ? BoxConstraints(
-                                      maxHeight: Adaptive.h(45),
-                                      minHeight: Adaptive.h(45),
-                                    )
-                                  : const BoxConstraints(),
-                              child: ListView(
-                                shrinkWrap: true,
-                                children: [
-                                  SizedBox(
-                                    height: Adaptive.h(1),
-                                  ),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: Text(
-                                      'Nama                                                     ',
-                                      style: TextStyle(
-                                        fontFamily: 'DMSans',
-                                        color: Colors.black,
-                                        fontSize: 16.sp,
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            children: <Widget>[
+                              Expanded(
+                                child: ConstrainedBox(
+                                  constraints: isKeyboardVisible
+                                      ? BoxConstraints(
+                                          maxHeight: Adaptive.h(45),
+                                          minHeight: Adaptive.h(45),
+                                        )
+                                      : const BoxConstraints(),
+                                  child: ListView(
+                                    shrinkWrap: true,
+                                    children: [
+                                      SizedBox(
+                                        height: Adaptive.h(1),
                                       ),
-                                    ),
-                                  ),
-                                  TextField(
-                                    textAlignVertical: TextAlignVertical.center,
-                                    controller: _controllerName,
-                                    style: TextStyle(
-                                      fontFamily: 'DMSans',
-                                      color: Colors.black,
-                                      fontSize: 16.sp,
-                                    ),
-                                    decoration: InputDecoration(
-                                      fillColor: Colors.white,
-                                      filled: true,
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(20),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: Text(
+                                          'Nama                                                     ',
+                                          style: TextStyle(
+                                            fontFamily: 'DMSans',
+                                            color: Colors.black,
+                                            fontSize: 16.sp,
+                                          ),
+                                        ),
                                       ),
-                                      hintText: 'Nama Pengingat',
-                                      errorText:
-                                          _submitted ? _errorTextNama : null,
-                                      isDense: true,
-                                      contentPadding: EdgeInsets.symmetric(
-                                          vertical: Adaptive.h(2)),
-                                      prefix: Padding(
-                                          padding: EdgeInsets.only(
-                                              left: Adaptive.h(2))),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    height: Adaptive.h(2),
-                                  ),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: Text(
-                                      'Tanggal',
-                                      style: TextStyle(
-                                        fontFamily: 'DMSans',
-                                        color: Colors.black,
-                                        fontSize: 16.sp,
+                                      TextFormField(
+                                        textAlignVertical:
+                                            TextAlignVertical.center,
+                                        initialValue: name,
+                                        // controller: _controllerName,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            name = value;
+                                          });
+                                        },
+                                        validator: (value) {
+                                          if (value == null || value.isEmpty) {
+                                            return 'Nama pengingat harus diisi';
+                                          } else if (value.length > 20) {
+                                            return 'Maksimal 20 karakter';
+                                          }
+                                          return null;
+                                        },
+                                        autovalidateMode:
+                                            AutovalidateMode.onUserInteraction,
+                                        style: TextStyle(
+                                          fontFamily: 'DMSans',
+                                          color: Colors.black,
+                                          fontSize: 16.sp,
+                                        ),
+                                        decoration: InputDecoration(
+                                          fillColor: Colors.white,
+                                          filled: true,
+                                          border: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                          ),
+                                          hintText: 'Nama Pengingat',
+                                          isDense: true,
+                                          contentPadding: EdgeInsets.symmetric(
+                                              vertical: Adaptive.h(2)),
+                                          prefix: Padding(
+                                              padding: EdgeInsets.only(
+                                                  left: Adaptive.h(2))),
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                  DateTimeField(
-                                    style: TextStyle(
-                                      fontFamily: 'DMSans',
-                                      color: Color(0xFF000000),
-                                      fontSize: 16.sp,
-                                    ),
-                                    initialPickerDateTime: selectedDate ??
-                                        (snapshot.data['tanggal_pengingat'] !=
-                                                null
-                                            ? DateTime.tryParse(snapshot
-                                                .data['tanggal_pengingat'])
-                                            : DateTime.now()),
-                                    dateFormat: DateFormat('dd/MM/yyyy'),
-                                    decoration: InputDecoration(
-                                      fillColor: Colors.white,
-                                      filled: true,
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(20),
+                                      SizedBox(
+                                        height: Adaptive.h(2),
                                       ),
-                                      isDense: true,
-                                      contentPadding:
-                                          EdgeInsets.all(Adaptive.h(2)),
-                                    ),
-                                    mode: DateTimeFieldPickerMode.date,
-                                    value: selectedDate ?? DateTime.now(),
-                                    onChanged: (DateTime? value) {
-                                      setState(() {
-                                        selectedDate = value;
-                                      });
-                                    },
-                                  ),
-                                  SizedBox(
-                                    height: Adaptive.h(2),
-                                  ),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: Text(
-                                      'Jam',
-                                      style: TextStyle(
-                                        fontFamily: 'DMSans',
-                                        color: Colors.black,
-                                        fontSize: 16.sp,
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: Text(
+                                          'Tanggal',
+                                          style: TextStyle(
+                                            fontFamily: 'DMSans',
+                                            color: Colors.black,
+                                            fontSize: 16.sp,
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                  TextField(
-                                    controller: _controllerJam,
-                                    keyboardType: TextInputType.text,
-                                    style: TextStyle(
-                                      fontFamily: 'DMSans',
-                                      color: Colors.black,
-                                      fontSize: 16.sp,
-                                    ),
-                                    decoration: InputDecoration(
-                                      fillColor: Colors.white,
-                                      filled: true,
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(20),
+                                      DateTimeFormField(
+                                        style: TextStyle(
+                                          fontFamily: 'DMSans',
+                                          color: const Color(0xFF000000),
+                                          fontSize: 16.sp,
+                                        ),
+                                        initialValue: scheduledDateTime,
+                                        initialPickerDateTime:
+                                            scheduledDateTime,
+                                        dateFormat:
+                                            DateFormat('dd/MM/yyyy HH:mm'),
+                                        decoration: InputDecoration(
+                                          fillColor: Colors.white,
+                                          filled: true,
+                                          border: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                          ),
+                                          isDense: true,
+                                          contentPadding:
+                                              EdgeInsets.all(Adaptive.h(2)),
+                                        ),
+                                        mode:
+                                            DateTimeFieldPickerMode.dateAndTime,
+                                        onChanged: (DateTime? value) {
+                                          setState(() {
+                                            scheduledDateTime = value!;
+                                          });
+                                        },
                                       ),
-                                      hintText: 'Jam Pengingat',
-                                      errorText:
-                                          _submitted ? _errorTextJam : null,
-                                      isDense: true,
-                                      contentPadding: EdgeInsets.symmetric(
-                                          vertical: Adaptive.h(2)),
-                                      prefix: Padding(
-                                          padding: EdgeInsets.only(
-                                              left: Adaptive.h(2))),
-                                    ),
+                                      SizedBox(
+                                        height: Adaptive.h(2),
+                                      ),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: Text(
+                                          'Frekuensi',
+                                          style: TextStyle(
+                                            fontFamily: 'DMSans',
+                                            color: Colors.black,
+                                            fontSize: 16.sp,
+                                          ),
+                                        ),
+                                      ),
+                                      DropDownTextField(
+                                        dropDownList: _frekuensi,
+                                        initialValue:
+                                            dropdownInitialValue.value,
+                                        dropDownItemCount: 3,
+                                        textStyle: TextStyle(
+                                          fontFamily: 'DMSans',
+                                          color: Colors.black,
+                                          fontSize: 16.sp,
+                                        ),
+                                        textFieldDecoration: InputDecoration(
+                                          errorText: _submitted
+                                              ? dropdownInitialValue.value
+                                                      .toString()
+                                                      .isEmpty
+                                                  ? 'Frekuensi harus diisi'
+                                                  : null
+                                              : null,
+                                          hintText: 'Frekuensi',
+                                          fillColor: Colors.white,
+                                          filled: true,
+                                          border: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                          ),
+                                          isDense: true,
+                                          contentPadding: EdgeInsets.symmetric(
+                                              vertical: Adaptive.h(2)),
+                                          prefix: Padding(
+                                              padding: EdgeInsets.only(
+                                                  left: Adaptive.h(2))),
+                                        ),
+                                        clearOption: false,
+                                        onChanged: (val) {
+                                          setState(() {
+                                            dropdownInitialValue = val;
+                                          });
+                                        },
+                                      ),
+                                    ],
                                   ),
-                                ],
+                                ),
                               ),
-                            ),
-                            Visibility(
-                              visible: isKeyboardVisible == false,
-                              replacement: const SizedBox(),
-                              child: Expanded(
-                                child: Align(
-                                  alignment: Alignment.bottomCenter,
-                                  child: EasyButton(
+                              Visibility(
+                                visible: isKeyboardVisible == false,
+                                replacement: const SizedBox(),
+                                child: Column(children: [
+                                  EasyButton(
                                     type: EasyButtonType.elevated,
                                     onPressed: () {
                                       setState(() => _submitted = true);
-                                      if (_errorTextNama == null &&
-                                          _errorTextJam == null &&
-                                          _controllerName
-                                              .value.text.isNotEmpty &&
-                                          _controllerJam
-                                              .value.text.isNotEmpty) {
-                                        selectedDate ??= DateTime.now();
+                                      if (_formKey.currentState!.validate()) {
                                         Alert(
                                           context: context,
                                           type: AlertType.warning,
                                           style: alertStyle,
                                           title: 'Warning',
-                                          desc: "Mau simpan perubahan mom?",
+                                          desc: "Mau hapus pengingat mom?",
                                           buttons: [
                                             DialogButton(
                                               onPressed: () async {
-                                                setState(
-                                                    () => _submitted = true);
                                                 try {
-                                                  if (_errorTextNama == null &&
-                                                      _errorTextJam == null &&
-                                                      _controllerName.value.text
-                                                          .isNotEmpty &&
-                                                      _controllerJam.value.text
-                                                          .isNotEmpty) {
-                                                    await updatePengingat(
-                                                        _controllerName.text,
-                                                        DateFormat('dd/MM/yyyy').format(selectedDate !=
-                                                                null
-                                                            ? selectedDate!
-                                                            : (snapshot.data[
-                                                                        'tanggal_pengingat'] !=
-                                                                    null
-                                                                ? DateTime.tryParse(
-                                                                        snapshot.data[
-                                                                            'tanggal_pengingat']) ??
-                                                                    DateTime
-                                                                        .now()
-                                                                : DateTime
-                                                                    .now())),
-                                                        _controllerJam.text);
-                                                    Navigator.pushReplacement(
-                                                        context,
-                                                        MaterialPageRoute(
-                                                            builder: (context) =>
-                                                                const Pengingat()));
-                                                  } else {
-                                                    return;
-                                                  }
+                                                  await deleteNotification();
+                                                  Navigator.pop(context);
+                                                  Navigator.pop(context, true);
                                                 } catch (e) {
                                                   if (mounted) {
                                                     Alert(
@@ -640,11 +621,112 @@ class _UbahPengingatState extends State<UbahPengingat> {
                                             ),
                                             DialogButton(
                                               onPressed: () {
-                                                Navigator.pushReplacement(
-                                                    context,
-                                                    MaterialPageRoute(
-                                                        builder: (context) =>
-                                                            const Pengingat()));
+                                                Navigator.pop(context);
+                                                Navigator.pop(context);
+                                              },
+                                              color: Colors.red,
+                                              child: const Text(
+                                                "TIDAK",
+                                                style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 20),
+                                              ),
+                                            )
+                                          ],
+                                        ).show();
+                                      } else {
+                                        return;
+                                      }
+                                    },
+                                    loadingStateWidget:
+                                        const CircularProgressIndicator(
+                                      strokeWidth: 3.0,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
+                                    ),
+                                    useEqualLoadingStateWidgetDimension: true,
+                                    useWidthAnimation: true,
+                                    width: double.infinity,
+                                    height: MediaQuery.of(context).size.height *
+                                        0.05,
+                                    borderRadius: 20,
+                                    buttonColor: Colors.red.shade400,
+                                    contentGap: 6.0,
+                                    idleStateWidget: Text(
+                                      'Hapus',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18.sp,
+                                        fontFamily: 'DMSans',
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    height: Adaptive.h(1.5),
+                                  ),
+                                  EasyButton(
+                                    type: EasyButtonType.elevated,
+                                    onPressed: () {
+                                      setState(() => _submitted = true);
+                                      if (_formKey.currentState!.validate()) {
+                                        Alert(
+                                          context: context,
+                                          type: AlertType.warning,
+                                          style: alertStyle,
+                                          title: 'Warning',
+                                          desc: "Mau simpan perubahan mom?",
+                                          buttons: [
+                                            DialogButton(
+                                              onPressed: () async {
+                                                try {
+                                                  await updateNotification(
+                                                      name,
+                                                      scheduledDateTime,
+                                                      dropdownInitialValue
+                                                          .value);
+                                                  Navigator.pop(context);
+                                                  Navigator.pop(context, true);
+                                                } catch (e) {
+                                                  if (mounted) {
+                                                    Alert(
+                                                      context: context,
+                                                      type: AlertType.error,
+                                                      style: alertStyle,
+                                                      title: 'Error',
+                                                      desc:
+                                                          "Tidak dapat terhubung dengan server",
+                                                      buttons: [
+                                                        DialogButton(
+                                                          onPressed: () =>
+                                                              Navigator.pop(
+                                                                  context),
+                                                          color: Colors.blue,
+                                                          child: const Text(
+                                                            "Oke",
+                                                            style: TextStyle(
+                                                                color: Colors
+                                                                    .white,
+                                                                fontSize: 20),
+                                                          ),
+                                                        )
+                                                      ],
+                                                    ).show();
+                                                  }
+                                                }
+                                              },
+                                              color: Colors.blue,
+                                              child: const Text(
+                                                "YA",
+                                                style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 20),
+                                              ),
+                                            ),
+                                            DialogButton(
+                                              onPressed: () {
+                                                Navigator.pop(context);
+                                                Navigator.pop(context);
                                               },
                                               color: Colors.red,
                                               child: const Text(
@@ -684,13 +766,13 @@ class _UbahPengingatState extends State<UbahPengingat> {
                                       ),
                                     ),
                                   ),
-                                ),
+                                ]),
                               ),
-                            ),
-                            SizedBox(
-                              height: Adaptive.h(2.5),
-                            ),
-                          ],
+                              SizedBox(
+                                height: Adaptive.h(2.5),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     )));
@@ -720,185 +802,180 @@ class _UbahPengingatState extends State<UbahPengingat> {
                           width: Adaptive.w(90),
                           child: Column(
                             children: <Widget>[
-                              ConstrainedBox(
-                                constraints: isKeyboardVisible
-                                    ? BoxConstraints(
-                                        maxHeight: Adaptive.h(45),
-                                        minHeight: Adaptive.h(45),
-                                      )
-                                    : const BoxConstraints(),
-                                child: ListView(
-                                  shrinkWrap: true,
-                                  children: [
-                                    SizedBox(
-                                      height: Adaptive.h(1),
-                                    ),
-                                    SizedBox(
-                                      width: double.infinity,
-                                      child: Text(
-                                        'Nama                                                     ',
+                              Expanded(
+                                child: ConstrainedBox(
+                                  constraints: isKeyboardVisible
+                                      ? BoxConstraints(
+                                          maxHeight: Adaptive.h(45),
+                                          minHeight: Adaptive.h(45),
+                                        )
+                                      : const BoxConstraints(),
+                                  child: ListView(
+                                    shrinkWrap: true,
+                                    children: [
+                                      SizedBox(
+                                        height: Adaptive.h(1),
+                                      ),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: Text(
+                                          'Nama                                                     ',
+                                          style: TextStyle(
+                                            fontFamily: 'DMSans',
+                                            color: Colors.black,
+                                            fontSize: 16.sp,
+                                          ),
+                                        ),
+                                      ),
+                                      TextField(
+                                        textAlignVertical:
+                                            TextAlignVertical.center,
+                                        controller: _controllerName,
+                                        onChanged: (value) {
+                                          _controllerName.text = value;
+                                        },
                                         style: TextStyle(
                                           fontFamily: 'DMSans',
                                           color: Colors.black,
                                           fontSize: 16.sp,
                                         ),
-                                      ),
-                                    ),
-                                    TextField(
-                                      textAlignVertical:
-                                          TextAlignVertical.center,
-                                      controller: _controllerName,
-                                      style: TextStyle(
-                                        fontFamily: 'DMSans',
-                                        color: Colors.black,
-                                        fontSize: 16.sp,
-                                      ),
-                                      decoration: InputDecoration(
-                                        fillColor: Colors.white,
-                                        filled: true,
-                                        border: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                        ),
-                                        hintText: 'Nama Pengingat',
-                                        errorText:
-                                            _submitted ? _errorTextNama : null,
-                                        isDense: true,
-                                        contentPadding: EdgeInsets.symmetric(
-                                            vertical: Adaptive.h(2)),
-                                        prefix: Padding(
-                                            padding: EdgeInsets.only(
-                                                left: Adaptive.h(2))),
-                                      ),
-                                    ),
-                                    SizedBox(
-                                      height: Adaptive.h(2),
-                                    ),
-                                    SizedBox(
-                                      width: double.infinity,
-                                      child: Text(
-                                        'Tanggal                                         ',
-                                        style: TextStyle(
-                                          fontFamily: 'DMSans',
-                                          color: Colors.black,
-                                          fontSize: 16.sp,
-                                        ),
-                                      ),
-                                    ),
-                                    DateTimeField(
-                                        style: TextStyle(
-                                          fontFamily: 'DMSans',
-                                          color: Colors.black,
-                                          fontSize: 16.sp,
-                                        ),
-                                        initialPickerDateTime: selectedDate ??
-                                            (snapshot.data != null &&
-                                                    snapshot.data[
-                                                            'tanggal_pengingat'] !=
-                                                        null
-                                                ? DateTime.tryParse(snapshot
-                                                    .data['tanggal_pengingat'])
-                                                : DateTime.now()),
-                                        dateFormat:
-                                            DateFormat('dd/MM/yyyy HH:mm'),
                                         decoration: InputDecoration(
                                           fillColor: Colors.white,
                                           filled: true,
-                                          hintText: 'Tanggal',
+                                          border: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                          ),
+                                          hintText: 'Nama Pengingat',
+                                          errorText: _submitted
+                                              ? _errorTextNama
+                                              : null,
+                                          isDense: true,
+                                          contentPadding: EdgeInsets.symmetric(
+                                              vertical: Adaptive.h(2)),
+                                          prefix: Padding(
+                                              padding: EdgeInsets.only(
+                                                  left: Adaptive.h(2))),
+                                        ),
+                                      ),
+                                      SizedBox(
+                                        height: Adaptive.h(2),
+                                      ),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: Text(
+                                          'Tanggal                                         ',
+                                          style: TextStyle(
+                                            fontFamily: 'DMSans',
+                                            color: Colors.black,
+                                            fontSize: 16.sp,
+                                          ),
+                                        ),
+                                      ),
+                                      DateTimeField(
+                                          style: TextStyle(
+                                            fontFamily: 'DMSans',
+                                            color: Colors.black,
+                                            fontSize: 16.sp,
+                                          ),
+                                          initialPickerDateTime:
+                                              scheduledDateTime,
+                                          dateFormat:
+                                              DateFormat('dd/MM/yyyy HH:mm'),
+                                          decoration: InputDecoration(
+                                            fillColor: Colors.white,
+                                            filled: true,
+                                            hintText: 'Tanggal',
+                                            border: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                            ),
+                                            isDense: true,
+                                            contentPadding:
+                                                EdgeInsets.all(Adaptive.h(2)),
+                                          ),
+                                          value: selectedDate ?? DateTime.now(),
+                                          mode: DateTimeFieldPickerMode
+                                              .dateAndTime,
+                                          onChanged: (value) {
+                                            setState(() {
+                                              selectedDate = value;
+                                            });
+                                          }),
+                                      SizedBox(
+                                        height: Adaptive.h(2),
+                                      ),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: Text(
+                                          'Frekuensi',
+                                          style: TextStyle(
+                                            fontFamily: 'DMSans',
+                                            color: Colors.black,
+                                            fontSize: 16.sp,
+                                          ),
+                                        ),
+                                      ),
+                                      DropDownTextField(
+                                        controller: _cnt,
+                                        dropDownList: _frekuensi,
+                                        dropDownItemCount: 3,
+                                        textStyle: TextStyle(
+                                          fontFamily: 'DMSans',
+                                          color: Colors.black,
+                                          fontSize: 16.sp,
+                                        ),
+                                        textFieldDecoration: InputDecoration(
+                                          errorText:
+                                              _submitted ? _errorTextJam : null,
+                                          hintText: 'Frekuensi',
+                                          fillColor: Colors.white,
+                                          filled: true,
                                           border: OutlineInputBorder(
                                             borderRadius:
                                                 BorderRadius.circular(20),
                                           ),
                                           isDense: true,
-                                          contentPadding:
-                                              EdgeInsets.all(Adaptive.h(2)),
+                                          contentPadding: EdgeInsets.symmetric(
+                                              vertical: Adaptive.h(2)),
+                                          prefix: Padding(
+                                              padding: EdgeInsets.only(
+                                                  left: Adaptive.h(2))),
                                         ),
-                                        value: selectedDate ?? DateTime.now(),
-                                        mode:
-                                            DateTimeFieldPickerMode.dateAndTime,
-                                        onChanged: (value) {
+                                        clearOption: false,
+                                        onChanged: (val) {
                                           setState(() {
-                                            selectedDate = value;
+                                            dropdownValue = val.value;
                                           });
-                                        }),
-                                    SizedBox(
-                                      height: Adaptive.h(2),
-                                    ),
-                                    SizedBox(
-                                      width: double.infinity,
-                                      child: Text(
-                                        'Frekuensi',
-                                        style: TextStyle(
-                                          fontFamily: 'DMSans',
-                                          color: Colors.black,
-                                          fontSize: 16.sp,
-                                        ),
+                                        },
                                       ),
-                                    ),
-                                    DropDownTextField(
-                                      controller: _cnt,
-                                      dropDownList: _frekuensi,
-                                      dropDownItemCount: 3,
-                                      textStyle: TextStyle(
-                                        fontFamily: 'DMSans',
-                                        color: Colors.black,
-                                        fontSize: 16.sp,
-                                      ),
-                                      textFieldDecoration: InputDecoration(
-                                        errorText:
-                                            _submitted ? _errorTextJam : null,
-                                        hintText: 'Frekuensi',
-                                        fillColor: Colors.white,
-                                        filled: true,
-                                        border: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                        ),
-                                        isDense: true,
-                                        contentPadding: EdgeInsets.symmetric(
-                                            vertical: Adaptive.h(2)),
-                                        prefix: Padding(
-                                            padding: EdgeInsets.only(
-                                                left: Adaptive.h(2))),
-                                      ),
-                                      clearOption: false,
-                                      onChanged: (val) {
-                                        setState(() {
-                                          dropdownValue = val.value;
-                                        });
-                                      },
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
                               Visibility(
                                 visible: isKeyboardVisible == false,
                                 replacement: const SizedBox(),
-                                child: Expanded(
-                                  child: Align(
-                                    alignment: Alignment.bottomCenter,
-                                    child: EasyButton(
-                                      type: EasyButtonType.elevated,
-                                      onPressed: () {
-                                        setState(() => _submitted = true);
-                                        if (_errorTextNama == null &&
-                                            _errorTextJam == null &&
-                                            _controllerName
-                                                .value.text.isNotEmpty &&
-                                            _controllerJam
-                                                .value.text.isNotEmpty) {
-                                          selectedDate ??= DateTime.now();
-                                          Alert(
-                                            context: context,
-                                            type: AlertType.warning,
-                                            style: alertStyle,
-                                            title: 'Warning',
-                                            desc: "Mau simpan perubahan mom?",
-                                            buttons: [
-                                              DialogButton(
-                                                onPressed: () async {
-                                                  setState(
-                                                      () => _submitted = true);
+                                child: Column(children: [
+                                  EasyButton(
+                                    type: EasyButtonType.elevated,
+                                    onPressed: () {
+                                      setState(() => _submitted = true);
+                                      if (_formKey.currentState!.validate()) {
+                                        Alert(
+                                          context: context,
+                                          type: AlertType.warning,
+                                          style: alertStyle,
+                                          title: 'Warning',
+                                          desc: "Mau hapus pengingat mom?",
+                                          buttons: [
+                                            DialogButton(
+                                              onPressed: () async {
+                                                try {
+                                                  await deleteNotification();
+                                                  Navigator.pop(context);
+                                                  Navigator.pop(context, true);
+                                                } catch (e) {
                                                   if (mounted) {
                                                     Alert(
                                                       context: context,
@@ -924,65 +1001,164 @@ class _UbahPengingatState extends State<UbahPengingat> {
                                                       ],
                                                     ).show();
                                                   }
-                                                },
-                                                color: Colors.blue,
-                                                child: const Text(
-                                                  "YA",
-                                                  style: TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 20),
-                                                ),
+                                                }
+                                              },
+                                              color: Colors.blue,
+                                              child: const Text(
+                                                "YA",
+                                                style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 20),
                                               ),
-                                              DialogButton(
-                                                onPressed: () {
-                                                  Navigator.pushReplacement(
-                                                      context,
-                                                      MaterialPageRoute(
-                                                          builder: (context) =>
-                                                              const Pengingat()));
-                                                },
-                                                color: Colors.red,
-                                                child: const Text(
-                                                  "TIDAK",
-                                                  style: TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 20),
-                                                ),
-                                              )
-                                            ],
-                                          ).show();
-                                        } else {
-                                          return;
-                                        }
-                                      },
-                                      loadingStateWidget:
-                                          const CircularProgressIndicator(
-                                        strokeWidth: 3.0,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                          Colors.white,
-                                        ),
+                                            ),
+                                            DialogButton(
+                                              onPressed: () {
+                                                Navigator.pop(context);
+                                                Navigator.pop(context);
+                                              },
+                                              color: Colors.red,
+                                              child: const Text(
+                                                "TIDAK",
+                                                style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 20),
+                                              ),
+                                            )
+                                          ],
+                                        ).show();
+                                      } else {
+                                        return;
+                                      }
+                                    },
+                                    loadingStateWidget:
+                                        const CircularProgressIndicator(
+                                      strokeWidth: 3.0,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
                                       ),
-                                      useEqualLoadingStateWidgetDimension: true,
-                                      useWidthAnimation: true,
-                                      width: double.infinity,
-                                      height:
-                                          MediaQuery.of(context).size.height *
-                                              0.05,
-                                      borderRadius: 20,
-                                      buttonColor: Colors.blue,
-                                      contentGap: 6.0,
-                                      idleStateWidget: Text(
-                                        'Simpan',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 18.sp,
-                                          fontFamily: 'DMSans',
-                                        ),
+                                    ),
+                                    useEqualLoadingStateWidgetDimension: true,
+                                    useWidthAnimation: true,
+                                    width: double.infinity,
+                                    height: MediaQuery.of(context).size.height *
+                                        0.05,
+                                    borderRadius: 20,
+                                    buttonColor: Colors.red.shade400,
+                                    contentGap: 6.0,
+                                    idleStateWidget: Text(
+                                      'Hapus',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18.sp,
+                                        fontFamily: 'DMSans',
                                       ),
                                     ),
                                   ),
-                                ),
+                                  SizedBox(
+                                    height: Adaptive.h(1.5),
+                                  ),
+                                  EasyButton(
+                                    type: EasyButtonType.elevated,
+                                    onPressed: () {
+                                      setState(() => _submitted = true);
+                                      if (_formKey.currentState!.validate()) {
+                                        Alert(
+                                          context: context,
+                                          type: AlertType.warning,
+                                          style: alertStyle,
+                                          title: 'Warning',
+                                          desc: "Mau simpan perubahan mom?",
+                                          buttons: [
+                                            DialogButton(
+                                              onPressed: () async {
+                                                try {
+                                                  await updateNotification(
+                                                      name,
+                                                      scheduledDateTime,
+                                                      dropdownInitialValue
+                                                          .value);
+                                                  Navigator.pop(context);
+                                                  Navigator.pop(context, true);
+                                                } catch (e) {
+                                                  if (mounted) {
+                                                    Alert(
+                                                      context: context,
+                                                      type: AlertType.error,
+                                                      style: alertStyle,
+                                                      title: 'Error',
+                                                      desc:
+                                                          "Tidak dapat terhubung dengan server",
+                                                      buttons: [
+                                                        DialogButton(
+                                                          onPressed: () =>
+                                                              Navigator.pop(
+                                                                  context),
+                                                          color: Colors.blue,
+                                                          child: const Text(
+                                                            "Oke",
+                                                            style: TextStyle(
+                                                                color: Colors
+                                                                    .white,
+                                                                fontSize: 20),
+                                                          ),
+                                                        )
+                                                      ],
+                                                    ).show();
+                                                  }
+                                                }
+                                              },
+                                              color: Colors.blue,
+                                              child: const Text(
+                                                "YA",
+                                                style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 20),
+                                              ),
+                                            ),
+                                            DialogButton(
+                                              onPressed: () {
+                                                Navigator.pop(context);
+                                                Navigator.pop(context);
+                                              },
+                                              color: Colors.red,
+                                              child: const Text(
+                                                "TIDAK",
+                                                style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 20),
+                                              ),
+                                            )
+                                          ],
+                                        ).show();
+                                      } else {
+                                        return;
+                                      }
+                                    },
+                                    loadingStateWidget:
+                                        const CircularProgressIndicator(
+                                      strokeWidth: 3.0,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
+                                    ),
+                                    useEqualLoadingStateWidgetDimension: true,
+                                    useWidthAnimation: true,
+                                    width: double.infinity,
+                                    height: MediaQuery.of(context).size.height *
+                                        0.05,
+                                    borderRadius: 20,
+                                    buttonColor: Colors.blue,
+                                    contentGap: 6.0,
+                                    idleStateWidget: Text(
+                                      'Simpan',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18.sp,
+                                        fontFamily: 'DMSans',
+                                      ),
+                                    ),
+                                  ),
+                                ]),
                               ),
                               SizedBox(
                                 height: Adaptive.h(2.5),
