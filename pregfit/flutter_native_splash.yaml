@@ -1,6 +1,6 @@
 flutter_native_splash:
   color: "#7F91AA"
-  # image: assets/image/launch_image.png
+  image: assets/icons/ic_logo.png 
   # branding: assets/branding-development.png
   color_dark: "#7F91AA"
   # image_dark: assets/image/launch_image.png

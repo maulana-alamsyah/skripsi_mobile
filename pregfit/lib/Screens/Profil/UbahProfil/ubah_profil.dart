@@ -1,14 +1,11 @@
 import 'dart:async';
-import 'dart:io';
-import 'dart:convert';
 import 'package:easy_loading_button/easy_loading_button.dart';
+import 'package:get_storage/get_storage.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
-import 'package:pregfit/Config/config.dart';
+import 'package:pregfit/Controller/api_controller.dart';
 import 'package:pregfit/Screens/Menu/menu.dart';
-import 'package:pregfit/Screens/Onboarding/onboarding.dart';
 import 'package:rflutter_alert/rflutter_alert.dart';
-import 'package:jwt_decoder/jwt_decoder.dart';
 import 'package:responsive_sizer/responsive_sizer.dart';
 import 'package:date_field/date_field.dart';
 import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart'
@@ -23,15 +20,20 @@ class UbahProfil extends StatefulWidget {
 }
 
 class _UbahProfilState extends State<UbahProfil> {
-  TextEditingController _controllerName = TextEditingController();
-  TextEditingController _controllerEmail = TextEditingController();
+  final TextEditingController _controllerName = TextEditingController();
+  final TextEditingController _controllerEmail = TextEditingController();
   late SingleValueDropDownController _cnt;
   bool _submitted = false;
   StreamSubscription<bool>? _keyboardVisibilitySubscription;
   bool isKeyboardVisible = false;
+  APIController apiController = APIController();
+  Future<dynamic>? _getUserFuture;
+  final box = GetStorage();
+  Map<String, dynamic>? userInfo;
 
   DateTime? selectedDate;
-  late String dropdownValue;
+  String? dropdownValue;
+  late bool emailUsed = false;
 
   final List<DropDownValueModel> _list = [
     const DropDownValueModel(name: '0-4 Bulan', value: "0-4 Bulan"),
@@ -41,8 +43,6 @@ class _UbahProfilState extends State<UbahProfil> {
     ),
     const DropDownValueModel(name: '7-9 Bulan', value: "7-9 Bulan"),
   ];
-
-  final client = HttpClient();
 
   String? get _errorTextNama {
     final nama = _controllerName.value.text.trim();
@@ -66,6 +66,8 @@ class _UbahProfilState extends State<UbahProfil> {
       return 'Email wajib diisi';
     } else if (!_isValidEmail(email)) {
       return 'Format email tidak valid';
+    } else if (emailUsed) {
+      return 'Email sudah digunakan pengguna lain';
     }
     return null;
   }
@@ -99,6 +101,7 @@ class _UbahProfilState extends State<UbahProfil> {
   @override
   void initState() {
     super.initState();
+    _getUserFuture = apiController.getUser(context);
     _keyboardVisibilitySubscription =
         keyboard.KeyboardVisibilityController().onChange.listen((bool visible) {
       setState(() {
@@ -106,6 +109,7 @@ class _UbahProfilState extends State<UbahProfil> {
       });
     });
     _cnt = SingleValueDropDownController();
+    fetchUserInfo();
   }
 
   @override
@@ -115,219 +119,47 @@ class _UbahProfilState extends State<UbahProfil> {
     super.dispose();
   }
 
-  Future<dynamic> getUser() async {
-    // var token = box.read('token');
-    var token = "test";
-    try {
-      final request =
-          await client.getUrl(Uri.parse("${Config.baseURL}/api/users"));
-      request.headers.set(
-          HttpHeaders.contentTypeHeader, "application/json; charset=UTF-8");
-      request.headers.set(HttpHeaders.authorizationHeader, "Bearer $token");
-
-      final response = await request.close();
-
-      if (response.statusCode == 200) {
-        return jsonDecode(await response.transform(utf8.decoder).join());
-      } else if (response.statusCode == 401) {
-        // _signOut();
-        // Navigator.pushReplacement(context,
-        //     MaterialPageRoute(builder: (context) => const Onboarding()));
-      }
-    } catch (e) {
-      if (e is SocketException) {
-        // Handle the SocketException (e.g., display an error message)
-        print('Network error: ${e.message}');
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
-        }
-      } else {
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
-        }
-      }
-    }
-  }
-
-  Future<dynamic> updateUser(
-      String nama, String tanggal, String usiaKandungan, String email) async {
-    if (usiaKandungan == 'null') {
-      usiaKandungan = '0-4 Bulan';
-    }
-    // var token = box.read('token');
-    var token = "test";
-
-    Map<String, dynamic> decodedToken = JwtDecoder.decode(token);
-    String no_hp = decodedToken['no_hp'];
-    print(json.encode({
-      'no_hp': no_hp,
-      'email': email,
-      'nama': nama,
-      'usia_kandungan': usiaKandungan,
-      'tanggal_lahir': tanggal
-    }));
-
-    try {
-      final request =
-          await client.putUrl(Uri.parse("${Config.baseURL}/api/users"));
-      request.headers.set(
-          HttpHeaders.contentTypeHeader, "application/json; charset=UTF-8");
-      request.headers.set(HttpHeaders.authorizationHeader, "Bearer $token");
-      if (usiaKandungan != 'null') {
-        print('this if');
-        final requestBodyBytes = utf8.encode(json.encode({
-          'no_hp': no_hp,
-          'email': email,
-          'nama': nama,
-          'usia_kandungan': usiaKandungan,
-          'tanggal_lahir': tanggal
-        }));
-
-        request.headers
-            .set('Content-Length', requestBodyBytes.length.toString());
-        request.write(json.encode({
-          'no_hp': no_hp,
-          'email': email,
-          'nama': nama,
-          'usia_kandungan': usiaKandungan,
-          'tanggal_lahir': tanggal
-        }));
-      } else {
-        print('this else');
-        final requestBodyBytes = json.encode({
-          'no_hp': no_hp,
-          'email': email,
-          'nama': nama,
-          'usia_kandungan': 'null',
-          'tanggal_lahir': tanggal
-        });
-
-        request.headers
-            .set('Content-Length', requestBodyBytes.length.toString());
-        request.write(json.encode({
-          'no_hp': no_hp,
-          'email': email,
-          'nama': nama,
-          'usia_kandungan': 'null',
-          'tanggal_lahir': tanggal
-        }));
-      }
-
-      final response = await request.close();
-
-      if (response.statusCode == 200) {
-        return jsonDecode(await response.transform(utf8.decoder).join());
-      } else if (response.statusCode == 401) {
-        // _signOut();
-        // Navigator.pushReplacement(
-        //     context, MaterialPageRoute(builder: (context) => const Onboarding()));
-      }
-    } catch (e) {
-      if (e is SocketException) {
-        // Handle the SocketException (e.g., display an error message)
-        print('Network error: ${e.message}');
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
-        }
-      } else {
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
-        }
-      }
-    }
-  }
-
-  void _updateController(String value) {
+  void _updateController(String? value) {
     setState(() {
       _cnt = SingleValueDropDownController(
-          data: DropDownValueModel(name: value, value: value));
+          data: DropDownValueModel(name: value!, value: value));
     });
+  }
+
+  void fetchUserInfo() async {
+    var userInfo = await box.read('user');
+    if (userInfo != null) {
+      if (userInfo['usia_kandungan'] != null &&
+          userInfo['usia_kandungan'] != 'null' &&
+          userInfo['usia_kandungan'].isNotEmpty) {
+          dropdownValue = userInfo['usia_kandungan'];
+      } else {
+        dropdownValue = '0-4 Bulan';
+      }
+
+      selectedDate = userInfo['tanggal_lahir'] != null
+                                            ? DateTime.tryParse(
+                                                userInfo['tanggal_lahir'])
+                                            : DateTime.now();
+
+      setState(() {
+        _controllerName.text = _controllerName.text.isEmpty
+            ? (userInfo['nama'] ?? '')
+            : _controllerName.text;
+        _controllerEmail.text = _controllerEmail.text.isEmpty
+            ? (userInfo['email'] ?? '')
+            : _controllerEmail.text;
+      });
+      _updateController(dropdownValue);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
-        future: getUser(),
+        future: _getUserFuture,
         builder: (context, snapshot) {
           if (snapshot.hasData) {
-            _controllerName.text = _controllerName.text.isEmpty
-                ? (snapshot.data['nama'] ?? '')
-                : _controllerName.text;
-            _controllerEmail.text = _controllerEmail.text.isEmpty
-                ? (snapshot.data['email'] ?? '')
-                : _controllerEmail.text;
-
-            if (snapshot.data!['usia_kandungan'] != null &&
-                snapshot.data!['usia_kandungan'] != 'null' &&
-                snapshot.data!['usia_kandungan'].isNotEmpty) {
-              dropdownValue = snapshot.data!['usia_kandungan'];
-            }
-
-            _updateController(dropdownValue);
 
             return WillPopScope(
                 onWillPop: () => _onWillPop(snapshot.data),
@@ -415,17 +247,13 @@ class _UbahProfilState extends State<UbahProfil> {
                                       ),
                                     ),
                                   ),
-                                  DateTimeField(
+                                  DateTimeFormField(
                                     style: TextStyle(
                                       fontFamily: 'DMSans',
                                       color: Colors.black,
                                       fontSize: 16.sp,
                                     ),
-                                    initialPickerDateTime: selectedDate ??
-                                        (snapshot.data['tanggal_lahir'] != null
-                                            ? DateTime.tryParse(
-                                                snapshot.data['tanggal_lahir'])
-                                            : DateTime.now()),
+                                    initialPickerDateTime: selectedDate,
                                     dateFormat: DateFormat('dd/MM/yyyy'),
                                     decoration: InputDecoration(
                                       fillColor: Colors.white,
@@ -439,7 +267,7 @@ class _UbahProfilState extends State<UbahProfil> {
                                           EdgeInsets.all(Adaptive.h(2)),
                                     ),
                                     mode: DateTimeFieldPickerMode.date,
-                                    value: selectedDate ?? DateTime.now(),
+                                    initialValue: selectedDate,
                                     onChanged: (DateTime? value) {
                                       setState(() {
                                         selectedDate = value;
@@ -510,6 +338,7 @@ class _UbahProfilState extends State<UbahProfil> {
                                   TextField(
                                     controller: _controllerEmail,
                                     keyboardType: TextInputType.emailAddress,
+                                    onChanged: (value) => emailUsed = false,
                                     style: TextStyle(
                                       fontFamily: 'DMSans',
                                       color: Colors.black,
@@ -554,84 +383,91 @@ class _UbahProfilState extends State<UbahProfil> {
                                         buttons: [
                                           DialogButton(
                                             onPressed: () async {
-                                              setState(() => _submitted = true);
-                                              try {
-                                                if (_errorTextNama == null &&
-                                                    _errorTextEmail == null &&
-                                                    _errorTextUsiaKandungan ==
-                                                        null &&
-                                                    dropdownValue != null &&
-                                                    _controllerName.value.text
-                                                        .isNotEmpty &&
-                                                    _controllerEmail.value.text
-                                                        .isNotEmpty &&
-                                                    dropdownValue!.isNotEmpty) {
-                                                  await updateUser(
-                                                      _controllerName.text,
-                                                      DateFormat('dd/MM/yyyy')
-                                                          .format(selectedDate !=
-                                                                  null
-                                                              ? selectedDate!
-                                                              : (snapshot.data['tanggal_lahir'] !=
-                                                                      null
-                                                                  ? DateTime.tryParse(snapshot.data['tanggal_lahir']) ??
-                                                                      DateTime
-                                                                          .now()
-                                                                  : DateTime
-                                                                      .now())),
-                                                      dropdownValue != null &&
-                                                              dropdownValue!
-                                                                  .isNotEmpty
-                                                          ? dropdownValue
-                                                          : ((snapshot.data['usia_kandungan'] !=
-                                                                      null &&
-                                                                  snapshot.data[
-                                                                          'usia_kandungan'] !=
-                                                                      'null' &&
-                                                                  snapshot
-                                                                      .data['usia_kandungan']
-                                                                      .isNotEmpty)
-                                                              ? snapshot.data['usia_kandungan']
-                                                              : '0-4 Bulan'),
-                                                      _controllerEmail.text);
-                                                  Navigator.pushReplacement(
-                                                      context,
-                                                      MaterialPageRoute(
-                                                          builder: (context) =>
-                                                              const Menu(
-                                                                index: 3,
-                                                              )));
-                                                } else {
-                                                  return;
-                                                }
-                                              } catch (e) {
-                                                if (mounted) {
-                                                  Alert(
-                                                    context: context,
-                                                    type: AlertType.error,
-                                                    style: alertStyle,
-                                                    title: 'Error',
-                                                    desc:
-                                                        "Tidak dapat terhubung dengan server",
-                                                    buttons: [
-                                                      DialogButton(
-                                                        onPressed: () =>
-                                                            Navigator.pop(
-                                                                context),
-                                                        color: Colors.blue,
-                                                        child: const Text(
-                                                          "Oke",
-                                                          style: TextStyle(
-                                                              color:
-                                                                  Colors.white,
-                                                              fontSize: 20),
-                                                        ),
-                                                      )
-                                                    ],
-                                                  ).show();
-                                                }
-                                              }
-                                            },
+                setState(() => _submitted = true);
+                try {
+                  if (_errorTextNama == null &&
+                      _errorTextEmail == null &&
+                      _errorTextUsiaKandungan == null &&
+                      dropdownValue != null &&
+                      _controllerName.value.text.isNotEmpty &&
+                      _controllerEmail.value.text.isNotEmpty &&
+                      dropdownValue!.isNotEmpty) {
+                    var res = await apiController.updateUser(context,
+                        _controllerName.text,
+                        DateFormat('dd/MM/yyyy').format(selectedDate != null
+                            ? selectedDate!
+                            : (snapshot.data['tanggal_lahir'] != null
+                                ? DateTime.tryParse(
+                                        snapshot.data['tanggal_lahir']) ??
+                                    DateTime.now()
+                                : DateTime.now())),
+                        dropdownValue != null && dropdownValue!.isNotEmpty
+                            ? dropdownValue
+                            : ((snapshot.data['usia_kandungan'] != null &&
+                                    snapshot.data['usia_kandungan'] != 'null' &&
+                                    snapshot.data['usia_kandungan'].isNotEmpty)
+                                ? snapshot.data['usia_kandungan']
+                                : '0-4 Bulan'),
+                        _controllerEmail.text);
+                    if(res == 200){
+                      emailUsed = false;
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const Menu(
+                                  index: 3,
+                                )));
+                    } else if (res == 400){
+                      setState(() => _submitted = true);
+                      emailUsed = true;
+                      print(emailUsed);
+                      Navigator.pop(context);
+                    }
+                  } else {
+                    Alert(
+                      context: context,
+                      type: AlertType.warning,
+                      style: alertStyle,
+                      title: 'Warning',
+                      desc: "Mohon isi data dengan lengkap.",
+                      buttons: [
+                        DialogButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            Navigator.of(context).pop();
+                          },
+                          color: Colors.blue,
+                          child: const Text(
+                            "Oke",
+                            style: TextStyle(color: Colors.white, fontSize: 20),
+                          ),
+                        )
+                      ],
+                    ).show();
+                  }
+                } catch (e) {
+                  debugPrint(e.toString());
+                  if (mounted) {
+                    Alert(
+                      context: context,
+                      type: AlertType.error,
+                      style: alertStyle,
+                      title: 'Error',
+                      desc: "Tidak dapat terhubung dengan server",
+                      buttons: [
+                        DialogButton(
+                          onPressed: () => Navigator.pop(context),
+                          color: Colors.blue,
+                          child: const Text(
+                            "Oke",
+                            style: TextStyle(color: Colors.white, fontSize: 20),
+                          ),
+                        )
+                      ],
+                    ).show();
+                  }
+                }
+              },
                                             color: Colors.blue,
                                             child: const Text(
                                               "YA",
@@ -1005,7 +841,7 @@ class _UbahProfilState extends State<UbahProfil> {
                       _controllerName.value.text.isNotEmpty &&
                       _controllerEmail.value.text.isNotEmpty &&
                       dropdownValue!.isNotEmpty) {
-                    await updateUser(
+                    var res = await apiController.updateUser(context,
                         _controllerName.text,
                         DateFormat('dd/MM/yyyy').format(selectedDate != null
                             ? selectedDate!
@@ -1022,13 +858,21 @@ class _UbahProfilState extends State<UbahProfil> {
                                 ? snapshotData['usia_kandungan']
                                 : '0-4 Bulan'),
                         _controllerEmail.text);
-                    Navigator.pushReplacement(
+                    if(res == 200){
+                      emailUsed = false;
+                      Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(
                             builder: (context) => const Menu(
                                   index: 3,
                                 )));
+                    } else if (res == 400){
+                      setState(() => _submitted = true);
+                      emailUsed = true;
+                      Navigator.pop(context);
+                    }
                   } else {
+                    emailUsed = false;
                     Alert(
                       context: context,
                       type: AlertType.warning,

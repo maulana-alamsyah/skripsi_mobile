@@ -106,18 +106,18 @@ class _PengingatState extends State<Pengingat> {
                       } else if (snapshot.hasError) {
                         return Center(child: Text('Error: ${snapshot.error}'));
                       } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                        return Center(child: Text('Belum ada pengingat'));
+                        return const Center(child: Text('Belum ada pengingat'));
                       } else {
-                        var _pengingat = activeNotifications.isNotEmpty
+                        var pengingat0 = activeNotifications.isNotEmpty
                             ? activeNotifications
                             : snapshot.data!;
                         return ListView.builder(
-                          itemCount: _pengingat.length,
+                          itemCount: pengingat0.length,
                           itemBuilder: (context, index) {
                             String time = 'Unknown';
                             String frekuensi = 'Harian';
                             String name = '';
-                            NotificationModel pengingat = _pengingat[index];
+                            NotificationModel pengingat = pengingat0[index];
                             int id = pengingat.content!.id!;
                             name = pengingat.content!.summary!;
                             if (pengingat.schedule is NotificationCalendar) {

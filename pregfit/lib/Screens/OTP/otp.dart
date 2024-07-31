@@ -1,21 +1,17 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
-import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
+import 'package:get_storage/get_storage.dart';
 import 'package:flutter/material.dart';
-import 'package:pregfit/Config/config.dart';
 import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
 import 'package:easy_loading_button/easy_loading_button.dart';
 import 'package:pinput/pinput.dart';
-import 'package:pregfit/Screens/Home/home.dart';
+import 'package:pregfit/Controller/api_controller.dart';
 import 'package:pregfit/Screens/Menu/menu.dart';
 import 'package:rflutter_alert/rflutter_alert.dart';
 import 'package:responsive_sizer/responsive_sizer.dart';
 
 class OTP extends StatefulWidget {
   final String phoneNo;
-  final String aksi;
+  final int aksi;
   final String email;
   const OTP(
       {super.key,
@@ -28,14 +24,25 @@ class OTP extends StatefulWidget {
 }
 
 class _OTPState extends State<OTP> {
+  APIController apiController = APIController();
   StreamSubscription<bool>? _keyboardVisibilitySubscription;
   bool isKeyboardVisible = false;
   final pinController = TextEditingController();
   final focusNode = FocusNode();
   bool? isValid;
   late String otp;
-  final client = HttpClient();
+  late bool wrongOTP = false;
   String errorMessage = '';
+  bool hasError = false;
+  late bool _submitted = false;
+  final box = GetStorage();
+
+  String? get _errorTextOTP {
+    if (wrongOTP) {
+      return 'Kode OTP kurang tepat mom.';
+    }
+    return null;
+  }
 
   var alertStyle = const AlertStyle(
       animationType: AnimationType.fromTop,
@@ -56,7 +63,7 @@ class _OTPState extends State<OTP> {
   @override
   void initState() {
     super.initState();
-    // generateOtp('+${modifyNumber(widget.phoneNo)}', false);
+    generateOtp(modifyNumber(widget.phoneNo), false);
     _keyboardVisibilitySubscription =
         KeyboardVisibilityController().onChange.listen((bool visible) {
       setState(() {
@@ -67,7 +74,7 @@ class _OTPState extends State<OTP> {
 
   String modifyNumber(String inputNumber) {
     if (inputNumber.startsWith('0')) {
-      return '62${inputNumber.substring(1)}';
+      return '+62${inputNumber.substring(1)}';
     }
     return inputNumber;
   }
@@ -78,23 +85,16 @@ class _OTPState extends State<OTP> {
     super.dispose();
   }
 
-  void handleError(PlatformException error) {
-    switch (error.code) {
-      case 'ERROR_INVALID_VERIFICATION_CODE':
-        FocusScope.of(context).requestFocus(FocusNode());
-        setState(() {
-          errorMessage = 'Invalid Code';
-        });
-        print('invalid code');
-        break;
-      default:
-        String? err = error.message;
+  Future<void> generateOtp(String contact, bool status) async {
+    try {
+      var res = await apiController.sendOTP(contact);
+      if (res == 200 && status) {
         Alert(
           context: context,
-          type: AlertType.error,
+          type: AlertType.success,
           style: alertStyle,
-          title: 'Error',
-          desc: err!,
+          title: 'Success',
+          desc: "OTP berhasil dikirim.",
           buttons: [
             DialogButton(
               onPressed: () => Navigator.pop(context),
@@ -106,345 +106,83 @@ class _OTPState extends State<OTP> {
             )
           ],
         ).show();
-        break;
-    }
-  }
-
-  Future<dynamic> attemptLogIn(String noHp) async {
-    final requestBodyBytes = utf8.encode(json.encode({'no_hp': noHp}));
-    try {
-      final request =
-          await client.postUrl(Uri.parse("${Config.baseURL}/api/signin"));
-      request.headers.set(
-          HttpHeaders.contentTypeHeader, "application/json; charset=UTF-8");
-      request.headers.set('Content-Length', requestBodyBytes.length.toString());
-      request.write(json.encode({'no_hp': noHp}));
-
-      final response = await request.close();
-
-      if (response.statusCode == 200) {
-        return jsonDecode(await response.transform(utf8.decoder).join());
-      } else {
-        return jsonDecode(await response.transform(utf8.decoder).join());
+      } else if(res != 200 && status) {
+        Alert(
+              context: context,
+              type: AlertType.error,
+              style: alertStyle,
+              title: 'Error',
+              desc: "Gagal kirim OTP",
+              buttons: [
+                DialogButton(
+                  onPressed: () => Navigator.pop(context),
+                  color: Colors.blue,
+                  child: const Text(
+                    "Oke",
+                    style: TextStyle(color: Colors.white, fontSize: 20),
+                  ),
+                )
+              ],
+            ).show();
       }
     } catch (e) {
-      if (e is SocketException) {
-        // Handle the SocketException (e.g., display an error message)
-        print('Network error: ${e.message}');
-      } else {
-        // Handle other exceptions
-        print('Error: $e');
-      }
+      Alert(
+              context: context,
+              type: AlertType.error,
+              style: alertStyle,
+              title: 'Error',
+              desc: "Gagal kirim OTP",
+              buttons: [
+                DialogButton(
+                  onPressed: () => Navigator.pop(context),
+                  color: Colors.blue,
+                  child: const Text(
+                    "Oke",
+                    style: TextStyle(color: Colors.white, fontSize: 20),
+                  ),
+                )
+              ],
+            ).show();
     }
   }
 
-  Future<dynamic> attemptLogInhtp(String noHp) async {
-    try {
-      final url = Uri.parse('${Config.baseURL}/api/signin');
-      final headers = {
-        'Content-Type': 'application/json',
-        'Authorization': 'Basic ${base64Encode(utf8.encode(noHp))}'
-      };
-      final response = await http.post(url, headers: headers);
+  Future<bool> verifyOtp(String contact, int action, String otp, String email) async {
+  try {
+    Map<String, dynamic> res = await apiController.verifOTP(contact, action, otp, email: email);
+    debugPrint(res.toString());
 
-      return jsonDecode(response.body);
-    } catch (e) {
-      if (e is SocketException) {
-        // Handle the SocketException (e.g., display an error message)
-        print('Network error: ${e.message}');
-      } else {}
+    if (res.containsKey('token') && res['token'] != null) {
+      box.write('token', res['token']);
+      return true;
+    } else {
+      // showAlert(context, 'Error', 'OTP tidak valid');
+      return false;
     }
+  } catch (e) {
+    // showAlert(context, 'Error', 'Gagal verifikasi');
+    return false;
   }
+}
 
-  Future<dynamic> attemptRegister(String noHp) async {
-    final requestBodyBytes = utf8.encode(json.encode({'no_hp': noHp}));
-    try {
-      final request =
-          await client.postUrl(Uri.parse("${Config.baseURL}/api/users"));
-      request.headers.set(
-          HttpHeaders.contentTypeHeader, "application/json; charset=UTF-8");
-      request.headers.set('Content-Length', requestBodyBytes.length.toString());
-      request.write(json.encode({'no_hp': noHp}));
-
-      final response = await request.close();
-
-      if (response.statusCode == 201) {
-        return jsonDecode(await response.transform(utf8.decoder).join());
-      } else if (response.statusCode == 409) {
-        return 'nomor sudah terdaftar';
-      }
-    } catch (e) {
-      if (e is SocketException) {
-        // Handle the SocketException (e.g., display an error message)
-        print('Network error: ${e.message}');
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
-        }
-      } else {
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
-        }
-      }
-    }
+  void showAlert(BuildContext context, String title, String desc) {
+    Alert(
+      context: context,
+      type: AlertType.error,
+      style: alertStyle,
+      title: title,
+      desc: desc,
+      buttons: [
+        DialogButton(
+          onPressed: () => Navigator.pop(context),
+          color: Colors.blue,
+          child: const Text(
+            "Oke",
+            style: TextStyle(color: Colors.white, fontSize: 20),
+          ),
+        )
+      ],
+    ).show();
   }
-
-  Future<dynamic> updateNoHP(String noHp, String email) async {
-    final requestBodyBytes =
-        utf8.encode(json.encode({'no_hp_baru': noHp, 'email': email}));
-    try {
-      final request =
-          await client.postUrl(Uri.parse("${Config.baseURL}/api/update_nohp"));
-      request.headers.set(
-          HttpHeaders.contentTypeHeader, "application/json; charset=UTF-8");
-      request.headers.set('Content-Length', requestBodyBytes.length.toString());
-      request.write(json.encode({'no_hp_baru': noHp, 'email': email}));
-
-      final response = await request.close();
-
-      if (response.statusCode == 200) {
-        return jsonDecode(await response.transform(utf8.decoder).join());
-      } else if (response.statusCode == 500) {
-        return 'No HP tidak dapat digunakan, atau sudah digunakan pengguna lain';
-      }
-    } catch (e) {
-      if (e is SocketException) {
-        // Handle the SocketException (e.g., display an error message)
-        print('Network error: ${e.message}');
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
-        }
-      } else {
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
-        }
-      }
-    }
-  }
-
-  Future<dynamic> checkNO(String noHp) async {
-    final requestBodyBytes = utf8.encode(json.encode({'no_hp': noHp}));
-    try {
-      final request =
-          await client.postUrl(Uri.parse("${Config.baseURL}/api/check_no"));
-      request.headers.set(
-          HttpHeaders.contentTypeHeader, "application/json; charset=UTF-8");
-      request.headers.set('Content-Length', requestBodyBytes.length.toString());
-      request.write(json.encode({'no_hp': noHp}));
-
-      final response = await request.close();
-
-      return response.statusCode;
-    } catch (e) {
-      if (e is SocketException) {
-        // Handle the SocketException (e.g., display an error message)
-        print('Network error: ${e.message}');
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
-        }
-      } else {
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
-        }
-      }
-    }
-  }
-
-  // Future<void> generateOtp(String contact, bool status) async {
-  //   print('status $status');
-  //   final PhoneCodeSent smsOTPSent = (String verId, [int? forceCodeResend]) {
-  //     verificationId = verId;
-  //   };
-  //   try {
-  //     await _auth.verifyPhoneNumber(
-  //         phoneNumber: contact,
-  //         codeAutoRetrievalTimeout: (String verId) {
-  //           verificationId = verId;
-  //         },
-  //         codeSent: smsOTPSent,
-  //         timeout: const Duration(seconds: 60),
-  //         verificationCompleted: (AuthCredential phoneAuthCredential) {
-  //           print('tes');
-  //           if (status) {
-  //             Alert(
-  //               context: context,
-  //               type: AlertType.success,
-  //               style: alertStyle,
-  //               title: 'Success',
-  //               desc: "OTP berhasil dikirim.",
-  //               buttons: [
-  //                 DialogButton(
-  //                   onPressed: () => Navigator.pop(context),
-  //                   color: Colors.blue,
-  //                   child: const Text(
-  //                     "Oke",
-  //                     style: TextStyle(color: Colors.white, fontSize: 20),
-  //                   ),
-  //                 )
-  //               ],
-  //             ).show();
-  //           }
-  //         },
-  //         verificationFailed: (FirebaseAuthException exception) {
-  //           Alert(
-  //             context: context,
-  //             type: AlertType.error,
-  //             style: alertStyle,
-  //             title: 'Error',
-  //             desc: "Gagal verifikasi",
-  //             buttons: [
-  //               DialogButton(
-  //                 onPressed: () => Navigator.pop(context),
-  //                 color: Colors.blue,
-  //                 child: const Text(
-  //                   "Oke",
-  //                   style: TextStyle(color: Colors.white, fontSize: 20),
-  //                 ),
-  //               )
-  //             ],
-  //           ).show();
-  //         });
-  //     print('ok');
-  //   } catch (e) {
-  //     handleError(e as PlatformException);
-  //   }
-  // }
-
-  // Future<void> verifyOtp(String smsOTP) async {
-  //   if (smsOTP == '') {
-  //     print('please enter 6 digit otp');
-  //     return;
-  //   }
-  //   try {
-  //     final AuthCredential credential = PhoneAuthProvider.credential(
-  //       verificationId: verificationId,
-  //       smsCode: smsOTP,
-  //     );
-  //     await _auth.signInWithCredential(credential);
-
-  //     Navigator.pushReplacement(
-  //         context,
-  //         MaterialPageRoute(
-  //             builder: (context) => const Menu(
-  //                   index: 0,
-  //                 )));
-  //   } catch (e) {
-  //     print(e);
-  //     Alert(
-  //       context: context,
-  //       type: AlertType.error,
-  //       style: alertStyle,
-  //       title: 'Error',
-  //       desc: "OTP tidak valid.",
-  //       buttons: [
-  //         DialogButton(
-  //           onPressed: () => Navigator.pop(context),
-  //           color: Colors.blue,
-  //           child: const Text(
-  //             "Oke",
-  //             style: TextStyle(color: Colors.white, fontSize: 20),
-  //           ),
-  //         )
-  //       ],
-  //     ).show();
-  //   }
-  // }
-
   @override
   Widget build(BuildContext context) {
     const focusedBorderColor = Color.fromRGBO(23, 171, 144, 1);
@@ -472,8 +210,17 @@ class _OTPState extends State<OTP> {
               toolbarHeight: Adaptive.h(8.7),
               title: Container(
                   padding: const EdgeInsets.only(left: 5),
-                  child: Image.asset('assets/icons/logo.png',
-                      width: Adaptive.w(30))),
+                  child: Row(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Image.asset(
+                          'assets/icons/logo.png',
+                          width: Adaptive.w(30),
+                        ),
+                      ],
+                    ),
+                  ),
               titleSpacing: 5,
               elevation: 2,
               backgroundColor: Colors.white,
@@ -544,23 +291,56 @@ class _OTPState extends State<OTP> {
                                 defaultPinTheme: defaultPinTheme,
                                 separatorBuilder: (index) =>
                                     const SizedBox(width: 8),
-                                validator: (value) {
-                                  if (isValid != null && isValid == true) {
-                                    return null;
-                                  }
-                                  return 'OTP kurang tepat mom';
+                                onClipboardFound: (value) {
+                                  debugPrint('onClipboardFound: $value');
+                                  pinController.setText(value);
                                 },
-                                // onClipboardFound: (value) {
-                                //   debugPrint('onClipboardFound: $value');
-                                //   pinController.setText(value);
-                                // },
+                                forceErrorState: hasError,
+                                errorText:
+                                  _submitted ? _errorTextOTP : null,
                                 hapticFeedbackType:
                                     HapticFeedbackType.lightImpact,
                                 onCompleted: (pin) async {
-                                  debugPrint('onCompleted: $pin');
+                                  setState(() => _submitted = true);
+                                  setState(() => otp = pin);
+                                  try {
+                                    bool res = await verifyOtp(widget.phoneNo, widget.aksi, pin, widget.email);
+                                    debugPrint(res.toString());
+                                    if(res){
+                                    setState(() {
+                                        isValid = true;
+                                        hasError = false;
+                                      });
+                                      Navigator.pushReplacement(
+                                        context,
+                                        MaterialPageRoute(
+                                            builder: (context) => const Menu(
+                                                  index: 0,
+                                                )));
+                                    }else{
+                                      wrongOTP = true;
+                                      setState(() {
+                                        isValid = false;
+                                        hasError = true;
+                                      });
+                                    }
+                                  } catch (e) {
+                                    wrongOTP = true;
+                                      setState(() {
+                                        isValid = false;
+                                        hasError = true;
+                                      });
+                                    debugPrint(e.toString());
+                                  }
                                 },
                                 onChanged: (value) {
+                                  if(value.length < 6){
+                                    setState(() {
+                                      hasError = false;
+                                    });
+                                  }
                                   debugPrint('onChanged: $value');
+                                  setState(() => otp = value);
                                 },
                                 cursor: Column(
                                   mainAxisAlignment: MainAxisAlignment.end,
@@ -612,8 +392,8 @@ class _OTPState extends State<OTP> {
                                 textAlign: TextAlign.left,
                               ),
                               onTap: () {
-                                // generateOtp(
-                                //     '+${modifyNumber(widget.phoneNo)}', true);
+                                generateOtp(
+                                    modifyNumber(widget.phoneNo), true);
                               },
                             )),
                       ]),
@@ -627,12 +407,32 @@ class _OTPState extends State<OTP> {
                           child: EasyButton(
                             type: EasyButtonType.elevated,
                             onPressed: () async {
-                              Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (context) => const Menu(
-                                            index: 0,
-                                          )));
+                              try {
+                                bool res = await verifyOtp(widget.phoneNo, widget.aksi, otp, widget.email);
+                                if(res){
+                                  setState(() {
+                                    isValid = true;
+                                    hasError = false;
+                                  });
+                                  Navigator.pushReplacement(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (context) => const Menu(
+                                              index: 0,
+                                            )));
+                                }else{
+                                  setState(() {
+                                    isValid = false;
+                                    hasError = true;
+                                  });
+                                }
+                              } catch (e) {
+                                setState(() {
+                                    isValid = false;
+                                    hasError = true;
+                                  });
+                                debugPrint(e.toString());
+                              }
                             },
                             loadingStateWidget: const CircularProgressIndicator(
                               strokeWidth: 3.0,

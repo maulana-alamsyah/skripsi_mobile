@@ -1,8 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:get_storage/get_storage.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:pregfit/Controller/api_controller.dart';
 import 'package:pregfit/Controller/notification_controller.dart';
+import 'package:pregfit/Screens/Menu/menu.dart';
 import 'package:responsive_sizer/responsive_sizer.dart';
 import 'Screens/Onboarding/onboarding.dart';
 
@@ -11,13 +14,21 @@ void main() async {
 
   setPreferredOrientation();
 
-  await initializeDateFormatting('id_ID', null)
-      .then((_) => runApp(const MyApp()));
+ 
 
   // await Alarm.init();
   await NotificationController.initializeLocalNotifications();
   await NotificationController.initializeIsolateReceivePort();
   NotificationController.startListeningNotificationEvents();
+
+  await GetStorage.init();
+
+  final APIController apiController = APIController();
+  
+  final bool hasToken = await apiController.checkTokenMain();
+   await initializeDateFormatting('id_ID', null)
+      .then((_) => runApp(MyApp(hasToken: hasToken,)));
+
 }
 
 void setPreferredOrientation() {
@@ -25,21 +36,23 @@ void setPreferredOrientation() {
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final bool hasToken;
+  const MyApp({super.key, required this.hasToken});
   static final GlobalKey<NavigatorState> navigatorKey =
-      GlobalKey<NavigatorState>();
-
-  // This widget is the root of your application.
+      GlobalKey<NavigatorState>(); 
 
   @override
   Widget build(BuildContext context) {
-    return ResponsiveSizer(builder: (context, orientation, screenType) {
+      return ResponsiveSizer(builder: (context, orientation, screenType) {
       return MaterialApp(
         navigatorKey: navigatorKey,
         title: 'Preg-Fit',
+        theme: ThemeData(
+          primaryColor: Colors.white,
+          scaffoldBackgroundColor: Colors.white,
+        ),
         debugShowCheckedModeBanner: false,
-        home: const Onboarding(),
-      );
+        home: hasToken ? const Menu(index: 0) : const Onboarding(),);
     });
   }
 }

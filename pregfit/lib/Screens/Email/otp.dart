@@ -1,7 +1,6 @@
-import 'package:email_auth/email_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:email_otp/email_otp.dart';
 import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
+import 'package:pregfit/Controller/api_controller.dart';
 import 'package:responsive_sizer/responsive_sizer.dart';
 import 'package:rflutter_alert/rflutter_alert.dart';
 import 'package:easy_loading_button/easy_loading_button.dart';
@@ -10,8 +9,7 @@ import 'package:pregfit/Screens/Email/new_phone.dart';
 
 class OTPEmail extends StatefulWidget {
   final String email;
-  final EmailOTP myauth;
-  const OTPEmail({super.key, required this.email, required this.myauth});
+  const OTPEmail({super.key, required this.email});
 
   @override
   State<OTPEmail> createState() => _OTPEmailState();
@@ -22,10 +20,19 @@ class _OTPEmailState extends State<OTPEmail> {
   final focusNode = FocusNode();
   bool? isValid;
   late String otp;
+  APIController apiController = APIController();
+  late bool _submitted = false;
+  late bool wrongOTP = false;
+  bool hasError = false;
 
-  var emailAuth = EmailAuth(
-    sessionName: "Sample session",
-  );
+  String? get _errorTextOTP {
+    if (wrongOTP) {
+      return 'Kode OTP kurang tepat mom.';
+    }
+    return null;
+  }
+
+
 
   var alertStyle = const AlertStyle(
       animationType: AnimationType.fromTop,
@@ -50,16 +57,10 @@ class _OTPEmailState extends State<OTPEmail> {
     super.dispose();
   }
 
-  void sendOtp() async {
-    bool result =
-        await emailAuth.sendOtp(recipientMail: widget.email, otpLength: 5);
-    if (result) {
-      print('berhasil send otp');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+
+
     const focusedBorderColor = Color.fromRGBO(23, 171, 144, 1);
     const fillColor = Color.fromRGBO(243, 246, 249, 0);
     const borderColor = Color.fromRGBO(23, 171, 144, 0.4);
@@ -85,8 +86,17 @@ class _OTPEmailState extends State<OTPEmail> {
               toolbarHeight: Adaptive.h(8.7),
               title: Container(
                   padding: const EdgeInsets.only(left: 5),
-                  child: Image.asset('assets/icons/logo.png',
-                      width: Adaptive.w(30))),
+                  child: Row(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Image.asset(
+                          'assets/icons/logo.png',
+                          width: Adaptive.w(30),
+                        ),
+                      ],
+                    ),
+                  ),
               titleSpacing: 5,
               elevation: 2,
               backgroundColor: Colors.white,
@@ -152,32 +162,45 @@ class _OTPEmailState extends State<OTPEmail> {
                               defaultPinTheme: defaultPinTheme,
                               separatorBuilder: (index) =>
                                   const SizedBox(width: 8),
-                              validator: (value) {
-                                if (isValid != null && isValid == true) {
-                                  return null;
-                                }
-                                return 'OTP kurang tepat mom';
+                              onClipboardFound: (value) {
+                                debugPrint('onClipboardFound: $value');
+                                pinController.setText(value);
                               },
-                              // onClipboardFound: (value) {
-                              //   debugPrint('onClipboardFound: $value');
-                              //   pinController.setText(value);
-                              // },
+                              forceErrorState: hasError,
                               hapticFeedbackType:
                                   HapticFeedbackType.lightImpact,
+                              errorText:
+                                  _submitted ? _errorTextOTP : null,
                               onCompleted: (pin) async {
-                                debugPrint('onCompleted: $pin');
-                                otp = pin;
-                                if (await widget.myauth.verifyOTP(otp: pin)) {
+                                setState(() => _submitted = true);
+                                setState(() {
+                                  otp = pin;
+                                });
+                                var res  = await apiController.verifOTPMail(pin, widget.email);
+                                if (res == 200) {
+                                  setState(() {
+                                    isValid = true;
+                                    hasError = false;
+                                  });
                                   Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
                                           builder: (context) =>
                                               NewPhone(email: widget.email)));
                                 } else {
-                                  setState(() => isValid = false);
+                                  wrongOTP = true;
+                                  setState(() {
+                                    isValid = false;
+                                    hasError = true;
+                                  });
                                 }
                               },
                               onChanged: (value) {
+                                if(value.length < 6){
+                                  setState(() {
+                                    hasError = false;
+                                  });
+                                }
                                 debugPrint('onChanged: $value');
                               },
                               cursor: Column(
@@ -229,22 +252,11 @@ class _OTPEmailState extends State<OTPEmail> {
                                 textAlign: TextAlign.left,
                               ),
                               onTap: () async {
-                                sendOtp();
-                                widget.myauth.setConfig(
-                                    appEmail:
-                                        "MS_cWDmcM@trial-0r83ql3j0vpgzw1j.mlsender.net",
-                                    appName: "Preg-Fit",
-                                    userEmail: widget.email,
-                                    otpLength: 6,
-                                    otpType: OTPType.digitsOnly);
-                                var send;
                                 try {
-                                  send = await widget.myauth.sendOTP();
+                                  await apiController.sendOTPMail(widget.email);
                                 } catch (e) {
-                                  send = false;
-                                  print(e);
+                                  debugPrint(e.toString());
                                 }
-                                if (send == true) {
                                   Alert(
                                     context: context,
                                     type: AlertType.success,
@@ -265,7 +277,6 @@ class _OTPEmailState extends State<OTPEmail> {
                                       )
                                     ],
                                   ).show();
-                                }
                               },
                             )),
                       ]),
@@ -279,15 +290,22 @@ class _OTPEmailState extends State<OTPEmail> {
                           child: EasyButton(
                             type: EasyButtonType.elevated,
                             onPressed: () async {
-                              if (await widget.myauth.verifyOTP(otp: otp)) {
-                                setState(() => isValid = true);
+                              var res  = await apiController.verifOTPMail(otp, widget.email);
+                              if (res == 200) {
+                                setState(() {
+                                    isValid = true;
+                                    hasError = false;
+                                  });
                                 Navigator.pushReplacement(
                                     context,
                                     MaterialPageRoute(
                                         builder: (context) =>
                                             NewPhone(email: widget.email)));
                               } else {
-                                setState(() => isValid = false);
+                                setState(() {
+                                    isValid = false;
+                                    hasError = true;
+                                  });
                               }
                             },
                             loadingStateWidget: const CircularProgressIndicator(

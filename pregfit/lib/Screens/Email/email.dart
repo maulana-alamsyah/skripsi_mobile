@@ -1,15 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:pregfit/Config/config.dart';
+import 'package:pregfit/Controller/api_controller.dart';
 import 'package:pregfit/Screens/Email/otp.dart';
 import 'package:responsive_sizer/responsive_sizer.dart';
 import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
 import 'package:rflutter_alert/rflutter_alert.dart';
 import 'package:easy_loading_button/easy_loading_button.dart';
-import 'package:email_otp/email_otp.dart';
-import 'package:email_auth/email_auth.dart';
 
 class Email extends StatefulWidget {
   const Email({super.key});
@@ -22,8 +18,7 @@ class _EmailState extends State<Email> {
   final _email = TextEditingController();
   StreamSubscription<bool>? _keyboardVisibilitySubscription;
   bool isKeyboardVisible = false;
-  final client = HttpClient();
-  EmailOTP myauth = EmailOTP();
+  APIController apiController = APIController();
 
   bool _submitted = false;
 
@@ -84,105 +79,8 @@ class _EmailState extends State<Email> {
     _email.clear();
   }
 
-  var emailAuth = EmailAuth(
-    sessionName: "Sample session",
-  );
-
-  void sendOtp() async {
-    bool result =
-        await emailAuth.sendOtp(recipientMail: _email.value.text, otpLength: 5);
-    if (result) {
-      print('berhasil send otp');
-    }
-  }
-
-  Future<dynamic> checkEmail(String email) async {
-    try {
-      final requestBodyBytes = utf8.encode(json.encode({'email': email}));
-      final request =
-          await client.postUrl(Uri.parse("${Config.baseURL}/api/check_email"));
-      request.headers.set(
-          HttpHeaders.contentTypeHeader, "application/json; charset=UTF-8");
-      request.headers.set('Content-Length', requestBodyBytes.length.toString());
-      request.write(json.encode({'email': email}));
-
-      final response = await request.close();
-
-      return response.statusCode;
-    } catch (e) {
-      if (e is SocketException) {
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
-        } else {
-          if (mounted) {
-            Alert(
-              context: context,
-              type: AlertType.error,
-              style: alertStyle,
-              title: 'Error',
-              desc: "Tidak dapat terhubung dengan server",
-              buttons: [
-                DialogButton(
-                  onPressed: () => Navigator.pop(context),
-                  color: Colors.blue,
-                  child: const Text(
-                    "Oke",
-                    style: TextStyle(color: Colors.white, fontSize: 20),
-                  ),
-                )
-              ],
-            ).show();
-          }
-        }
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    myauth.setSMTP(
-        host: "smtp.mailersend.net",
-        auth: true,
-        username: "MS_cWDmcM@trial-0r83ql3j0vpgzw1j.mlsender.net",
-        password: "Uv3CwFpZRt2aQ51S",
-        secure: "TLS",
-        port: 587);
-
-    myauth.setTheme(theme: "v1");
-
-    var template = '''<html>
-    <body>
-<div style="max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; overflow: hidden;">
-        <div style="background-color: #fff;; padding: 0 20px; text-align: center; color: #7F91AA;">
-            <img style="display: block; margin: 0 auto; width: 80px;" src="https://i.ibb.co/vqMCTdS/Untitled-design-4.png" title="logo" alt="logo" data-bit="iit">
-            <h1 style="margin-top: 0;">Preg-Fit</h1>
-        </div>
-        <div style="height: 1px; background-color: #ecf0f1; margin: 20px 0;"></div>
-        <p>Hi Mom!<br/><br/>Ini dia kode rahasia kita. Jangan berikan kode ini ke siapa pun untuk alasan keamanan ya! <br/>Gunakan kode ini hanya untuk verifikasi akun <strong>{{app_name}}</strong> mom.<br/> Semoga hari mom menyenangkan yaa &#129392; &#129392;.</p><br> 
-      <center><span style="background: red; padding: 5px 15px 5px 15px; font-size: 20px; font-weight: bold; border-radius: 20px; color: white; background-color: #2c3e50;">{{otp}}</span></center>
-            <div style="height: 1px; background-color: #ecf0f1; margin: 20px 0;"></div>
-        <div style="text-align: center; padding: 20px; background-color: #ecf0f1;">
-            <p style="font-size: 14px; color: #03265B; margin: 0;">&copy; <strong>Preg-Fit</strong></p><div class="yj6qo"></div><div class="adL">
-        </div></div><div class="adL">
-    </div></div>
-<!--''';
-    myauth.setTemplate(render: template);
 
     return KeyboardVisibilityBuilder(
         builder: (BuildContext context, bool isKeyboardVisible) {
@@ -192,8 +90,17 @@ class _EmailState extends State<Email> {
               toolbarHeight: Adaptive.h(8.7),
               title: Container(
                   padding: const EdgeInsets.only(left: 5),
-                  child: Image.asset('assets/icons/logo.png',
-                      width: Adaptive.w(30))),
+                  child: Row(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Image.asset(
+                          'assets/icons/logo.png',
+                          width: Adaptive.w(30),
+                        ),
+                      ],
+                    ),
+                  ),
               titleSpacing: 5,
               elevation: 2,
               backgroundColor: Colors.white,
@@ -261,30 +168,22 @@ class _EmailState extends State<Email> {
                             onPressed: () async {
                               setState(() => _submitted = true);
                               if (_errorText == null) {
-                                var res = await checkEmail(_email.text);
+                                var res = await apiController.checkEmail(_email.text);
                                 if (res == 409) {
-                                  sendOtp();
-                                  myauth.setConfig(
-                                      appEmail:
-                                          "MS_cWDmcM@trial-0r83ql3j0vpgzw1j.mlsender.net",
-                                      appName: "Preg-Fit",
-                                      userEmail: _email.text,
-                                      otpLength: 6,
-                                      otpType: OTPType.digitsOnly);
                                   var send;
                                   try {
-                                    send = await myauth.sendOTP();
+                                    send = await apiController.sendOTPMail(_email.value.text);
                                   } catch (e) {
                                     send = false;
-                                    print(e);
+                                    debugPrint(e.toString());
                                   }
-                                  if (send == true) {
+                                  print(send);
+                                  if (send == 200 || send == 409) {
                                     Navigator.push(
                                         context,
                                         MaterialPageRoute(
                                             builder: (context) => OTPEmail(
                                                   email: _email.text,
-                                                  myauth: myauth,
                                                 )));
                                   }
                                 } else {

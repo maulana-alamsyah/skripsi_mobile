@@ -31,7 +31,6 @@ class _MenuState extends State<Menu> {
 
   @override
   Widget build(BuildContext context) {
-    double iconSize = MediaQuery.of(context).size.width * 0.07;
 
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Color.fromRGBO(130, 165, 255, 1),
@@ -41,9 +40,7 @@ class _MenuState extends State<Menu> {
       bottomNavigationBar: ClipRRect(
           borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(20.0), topRight: Radius.circular(20.0)),
-          child: SizedBox(
-            height: MediaQuery.of(context).size.width * 0.2,
-            child: BottomNavigationBar(
+          child: BottomNavigationBar(
               onTap: onTabTapped,
               currentIndex: _currentIndex,
               items: const [
@@ -71,7 +68,7 @@ class _MenuState extends State<Menu> {
               unselectedItemColor: Colors.black,
               selectedItemColor: Colors.blue,
             ),
-          )),
+          ),
     );
   }
 }

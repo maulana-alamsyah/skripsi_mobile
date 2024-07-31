@@ -69,7 +69,7 @@ class NotificationController {
     if (receivedAction.actionType == ActionType.SilentAction ||
         receivedAction.actionType == ActionType.SilentBackgroundAction) {
       // For background actions, you must hold the execution until the end
-      print(
+      debugPrint(
           'Message sent via notification input: "${receivedAction.buttonKeyInput}"');
       await executeLongTaskInBackground();
     } else {
@@ -77,13 +77,13 @@ class NotificationController {
       // to a new page or use a valid context, since parallel isolates do not
       // have valid context, so you need redirect the execution to main isolate
       if (receivePort == null) {
-        print(
+        debugPrint(
             'onActionReceivedMethod was called inside a parallel dart isolate.');
         SendPort? sendPort =
             IsolateNameServer.lookupPortByName('notification_action_port');
 
         if (sendPort != null) {
-          print('Redirecting the execution to main isolate process.');
+          debugPrint('Redirecting the execution to main isolate process.');
           sendPort.send(receivedAction);
           return;
         }
@@ -115,7 +115,7 @@ class NotificationController {
           return AlertDialog(
             title: Text('Get Notified!',
                 style: Theme.of(context).textTheme.titleLarge),
-            content: Column(
+            content: const Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Row(
@@ -129,8 +129,8 @@ class NotificationController {
                 //     ),
                 //   ],
                 // ),
-                const SizedBox(height: 20),
-                const Text(
+                SizedBox(height: 20),
+                Text(
                     'Allow Awesome Notifications to send you beautiful notifications!'),
               ],
             ),
@@ -169,12 +169,12 @@ class NotificationController {
   ///     BACKGROUND TASKS TEST
   ///  *********************************************
   static Future<void> executeLongTaskInBackground() async {
-    print("starting long task");
+    debugPrint("starting long task");
     // await Future.delayed(const Duration(seconds: 4));
     // final url = Uri.parse("http://google.com");
     // final re = await http.get(url);
     // print(re.body);
-    print("long task done");
+    debugPrint("long task done");
   }
 
   ///  *********************************************

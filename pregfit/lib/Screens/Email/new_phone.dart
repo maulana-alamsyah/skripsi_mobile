@@ -1,11 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
+import 'package:pregfit/Controller/api_controller.dart';
 import 'package:pregfit/Screens/OTP/otp.dart';
 import 'package:responsive_sizer/responsive_sizer.dart';
-import 'package:pregfit/Config/config.dart';
 import 'package:rflutter_alert/rflutter_alert.dart';
 import 'package:easy_loading_button/easy_loading_button.dart';
 
@@ -23,6 +22,7 @@ class _NewPhoneState extends State<NewPhone> {
   StreamSubscription<bool>? _keyboardVisibilitySubscription;
   bool isKeyboardVisible = false;
   bool _submitted = false;
+  APIController apiController = APIController();
 
   String? get _errorText {
     final phone = _phone.value.text;
@@ -69,64 +69,6 @@ class _NewPhoneState extends State<NewPhone> {
     _phone.clear();
   }
 
-  Future<dynamic> checkNO(String noHP) async {
-    try {
-      final requestBodyBytes = utf8.encode(json.encode({'no_hp': noHP}));
-      final request =
-          await client.postUrl(Uri.parse("${Config.baseURL}/api/check_no"));
-      request.headers.set(
-          HttpHeaders.contentTypeHeader, "application/json; charset=UTF-8");
-      request.headers.set('Content-Length', requestBodyBytes.length.toString());
-      request.write(json.encode({'no_hp': noHP}));
-
-      final response = await request.close();
-
-      return response.statusCode;
-    } catch (e) {
-      if (e is SocketException) {
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
-        } else {
-          if (mounted) {
-            Alert(
-              context: context,
-              type: AlertType.error,
-              style: alertStyle,
-              title: 'Error',
-              desc: "Tidak dapat terhubung dengan server",
-              buttons: [
-                DialogButton(
-                  onPressed: () => Navigator.pop(context),
-                  color: Colors.blue,
-                  child: const Text(
-                    "Oke",
-                    style: TextStyle(color: Colors.white, fontSize: 20),
-                  ),
-                )
-              ],
-            ).show();
-          }
-        }
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return KeyboardVisibilityBuilder(
@@ -137,8 +79,17 @@ class _NewPhoneState extends State<NewPhone> {
               toolbarHeight: Adaptive.h(8.7),
               title: Container(
                   padding: const EdgeInsets.only(left: 5),
-                  child: Image.asset('assets/icons/logo.png',
-                      width: Adaptive.w(30))),
+                  child: Row(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Image.asset(
+                          'assets/icons/logo.png',
+                          width: Adaptive.w(30),
+                        ),
+                      ],
+                    ),
+                  ),
               titleSpacing: 5,
               elevation: 2,
               backgroundColor: Colors.white,
@@ -227,14 +178,14 @@ class _NewPhoneState extends State<NewPhone> {
                               setState(() => _submitted = true);
                               if (_errorText == null) {
                                 if (_phone.value.text.isNotEmpty) {
-                                  var res = await checkNO(_phone.text);
+                                  var res = await apiController.checkNO(_phone.text);
                                   if (res == 200) {
                                     Navigator.push(
                                         context,
                                         MaterialPageRoute(
                                             builder: (context) => OTP(
                                                   phoneNo: _phone.text,
-                                                  aksi: 'new_phone',
+                                                  aksi: 2,
                                                   email: widget.email,
                                                 )));
                                   } else if (res == 409) {

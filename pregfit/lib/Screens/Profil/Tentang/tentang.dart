@@ -77,7 +77,7 @@ class _TentangState extends State<Tentang> {
                             ))),
                     TextSpan(
                         text: '+62 896-3609-2727\n',
-                        recognizer: new TapGestureRecognizer()
+                        recognizer: TapGestureRecognizer()
                           ..onTap = () {
                             launchUrl(
                                 Uri.parse(
@@ -99,10 +99,10 @@ class _TentangState extends State<Tentang> {
                             ))),
                     TextSpan(
                         text: 'cs@preg-fit.id',
-                        recognizer: new TapGestureRecognizer()
+                        recognizer: TapGestureRecognizer()
                           ..onTap = () {
                             launchUrl(Uri.parse(
-                                'mailto:destynurulanitsa24@gmail.com'));
+                                'mailto:maulanalamsyah@gmail.com'));
                           },
                         style: TextStyle(
                           fontFamily: 'DMSans',
@@ -143,7 +143,7 @@ class _TentangState extends State<Tentang> {
                       title: Text(
                           '''Preg-Fit merupakan aplikasi yang dibuat untuk membantu para ibu hamil dalam melakukan senam yoga ibu hamil secara mandiri, kapan pun dan dimanapun. Preg-Fit dapat mendampingi bunda selayaknya instruktur senam yoga ibu hamil.
         
-        Saat ini varsi aplikasi Preg-Fit yaitu 1.0''',
+        Saat ini versi aplikasi Preg-Fit yaitu 2.0''',
                           textAlign: TextAlign.justify,
                           style: TextStyle(
                             fontFamily: 'DMSans',

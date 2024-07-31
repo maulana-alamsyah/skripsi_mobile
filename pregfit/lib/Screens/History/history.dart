@@ -3,12 +3,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pregfit/Config/config.dart';
+import 'package:pregfit/Controller/api_controller.dart';
 import 'package:pregfit/Screens/Menu/menu.dart';
 import 'package:rflutter_alert/rflutter_alert.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:responsive_sizer/responsive_sizer.dart';
 import 'package:pie_chart/pie_chart.dart';
-import 'package:pregfit/Screens/Onboarding/onboarding.dart';
 
 class History extends StatefulWidget {
   const History({super.key});
@@ -22,6 +22,7 @@ class _HistoryState extends State<History> {
   List? data;
   late List<dynamic> jsonData;
   late List<Map<String, dynamic>> apiResponse;
+  APIController apiController = APIController();
 
   final client = HttpClient();
 
@@ -63,7 +64,7 @@ class _HistoryState extends State<History> {
     } catch (e) {
       if (e is SocketException) {
         // Handle the SocketException (e.g., display an error message)
-        print('Network error: ${e.message}');
+        debugPrint('Network error: ${e.message}');
         if (mounted) {
           Alert(
             context: context,
@@ -107,34 +108,6 @@ class _HistoryState extends State<History> {
     }
   }
 
-  Future<dynamic> getPopular() async {
-    // var token = box.read('token');
-    var token = "test";
-    try {
-      final request =
-          await client.getUrl(Uri.parse("${Config.baseURL}/api/popular"));
-      request.headers.set(
-          HttpHeaders.contentTypeHeader, "application/json; charset=UTF-8");
-      request.headers.set(HttpHeaders.authorizationHeader, "Bearer $token");
-
-      final response = await request.close();
-
-      if (response.statusCode == 200) {
-        final jsonResponse = await response.transform(utf8.decoder).join();
-        final decodedResponse = jsonDecode(jsonResponse) as List<dynamic>;
-        final apiResponse = decodedResponse.cast<Map<String, dynamic>>();
-
-        return apiResponse;
-      } else if (response.statusCode == 401) {
-        // _signOut();
-        // Navigator.pushReplacement(
-        //     context, MaterialPageRoute(builder: (context) => const Onboarding()));
-      }
-    } catch (e) {
-      print(e);
-    }
-  }
-
   Future<bool> _onWillPop() async {
     return (await Navigator.pushReplacement(context,
         MaterialPageRoute(builder: (context) => const Menu(index: 0))));
@@ -165,7 +138,7 @@ class _HistoryState extends State<History> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
-        future: Future.wait([getPopular(), getHistory()]),
+        future: Future.wait([apiController.getPopular(context), apiController.getHistory(context)]),
         builder: (context, snapshot) {
           if (snapshot.hasData &&
               !snapshot.hasError &&
@@ -173,7 +146,6 @@ class _HistoryState extends State<History> {
             data = snapshot.data![1];
             var popular = snapshot.data![0];
 
-            print(popular);
 
             Map<String, double> dataMap = {};
 

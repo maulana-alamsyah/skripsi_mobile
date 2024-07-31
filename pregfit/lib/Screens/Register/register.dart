@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:pregfit/Config/config.dart';
+import 'package:pregfit/Controller/api_controller.dart';
 import 'package:pregfit/Screens/ChatBot/chatbot.dart';
+import 'package:pregfit/Screens/OTP/otp.dart';
 import 'package:responsive_sizer/responsive_sizer.dart';
 import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
 import 'package:rflutter_alert/rflutter_alert.dart';
@@ -17,6 +17,7 @@ class Register extends StatefulWidget {
 }
 
 class _RegisterState extends State<Register> {
+  APIController apiController = APIController();
   final _phone = TextEditingController();
   final client = HttpClient();
   StreamSubscription<bool>? _keyboardVisibilitySubscription;
@@ -31,6 +32,8 @@ class _RegisterState extends State<Register> {
     final phone = _phone.value.text;
     if (phone.isEmpty) {
       return 'Nomor HP wajib diisi';
+    } else if (phone.length < 5) {
+      return 'Nomor HP tidak valid';
     }
     return null;
   }
@@ -43,6 +46,22 @@ class _RegisterState extends State<Register> {
       animationDuration: Duration(milliseconds: 400),
       alertBorder: RoundedRectangleBorder(
         borderRadius: BorderRadius.all(Radius.circular(10)),
+        side: BorderSide(
+          color: Colors.grey,
+        ),
+      ),
+      overlayColor: Color(0x95000000),
+      alertElevation: 0,
+      alertAlignment: Alignment.center);
+
+    var alertStyle1 = const AlertStyle(
+      animationType: AnimationType.fromTop,
+      isCloseButton: false,
+      isOverlayTapDismiss: true,
+      titleStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.normal),
+      animationDuration: Duration(milliseconds: 400),
+      alertBorder: RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(20)),
         side: BorderSide(
           color: Colors.grey,
         ),
@@ -78,64 +97,6 @@ class _RegisterState extends State<Register> {
     });
   }
 
-  Future<dynamic> checkNO(String noHP) async {
-    try {
-      final requestBodyBytes = utf8.encode(json.encode({'no_hp': noHP}));
-      final request =
-          await client.postUrl(Uri.parse("${Config.baseURL}/api/check_no"));
-      request.headers.set(
-          HttpHeaders.contentTypeHeader, "application/json; charset=UTF-8");
-      request.headers.set('Content-Length', requestBodyBytes.length.toString());
-      request.write(json.encode({'no_hp': noHP}));
-
-      final response = await request.close();
-
-      return response.statusCode;
-    } catch (e) {
-      if (e is SocketException) {
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
-        }
-      } else {
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
-        }
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return KeyboardVisibilityBuilder(
@@ -146,8 +107,17 @@ class _RegisterState extends State<Register> {
               toolbarHeight: Adaptive.h(8.7),
               title: Container(
                   padding: const EdgeInsets.only(left: 5),
-                  child: Image.asset('assets/icons/logo.png',
-                      width: Adaptive.w(30))),
+                  child: Row(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Image.asset(
+                          'assets/icons/logo.png',
+                          width: Adaptive.w(30),
+                        ),
+                      ],
+                    ),
+                  ),
               titleSpacing: 5,
               elevation: 2,
               backgroundColor: Colors.white,
@@ -232,181 +202,57 @@ class _RegisterState extends State<Register> {
                           child: EasyButton(
                             type: EasyButtonType.elevated,
                             onPressed: () async {
-                              print(_errorText);
+                              debugPrint(_errorText);
                               setState(() => _submitted = true);
                               if (_errorText == null) {
                                 if (_phone.value.text.isNotEmpty) {
-                                  var res = await checkNO(_phone.text);
-                                  if (res == 200) {
-                                    if (mounted) {
+                                  var res = await apiController.checkNO(_phone.text);
+                                  if(mounted){
+                                    if (res == 200) {
+                                      _alertPertama(context);
+                                    } else if (res == 409) {
                                       Alert(
                                         context: context,
+                                        type: AlertType.warning,
                                         style: alertStyle,
-                                        title:
-                                            'Sebelum mendaftar mom perlu menyetujui pernyataan dibawah ini',
-                                        content: StatefulBuilder(
-                                          builder: (BuildContext context,
-                                              StateSetter setState) {
-                                            return Column(
-                                              children: [
-                                                CheckboxListTile(
-                                                  dense: true,
-                                                  activeColor: Colors.blue,
-                                                  contentPadding:
-                                                      EdgeInsets.zero,
-                                                  controlAffinity:
-                                                      ListTileControlAffinity
-                                                          .leading,
-                                                  title: Text(
-                                                    'Saya sudah konsultasi dan mendapatkan izin dari dokter kandungan',
-                                                    style: TextStyle(
-                                                      fontSize:
-                                                          MediaQuery.of(context)
-                                                                  .size
-                                                                  .width *
-                                                              0.04,
-                                                    ),
-                                                  ),
-                                                  value: value1,
-                                                  onChanged: (bool? value) {
-                                                    setState(() {
-                                                      value1 = value!;
-                                                    });
-                                                  },
-                                                ),
-                                                CheckboxListTile(
-                                                  dense: true,
-                                                  activeColor: Colors.blue,
-                                                  contentPadding:
-                                                      EdgeInsets.zero,
-                                                  controlAffinity:
-                                                      ListTileControlAffinity
-                                                          .leading,
-                                                  title: Text(
-                                                    'Saya tidak mempunyai riwayat flek/pendarahan selama kehamilan',
-                                                    style: TextStyle(
-                                                      fontSize:
-                                                          MediaQuery.of(context)
-                                                                  .size
-                                                                  .width *
-                                                              0.04,
-                                                    ),
-                                                  ),
-                                                  value: value2,
-                                                  onChanged: (bool? value) {
-                                                    setState(() {
-                                                      value2 = value!;
-                                                    });
-                                                  },
-                                                ),
-                                                CheckboxListTile(
-                                                  dense: true,
-                                                  activeColor: Colors.blue,
-                                                  contentPadding:
-                                                      EdgeInsets.zero,
-                                                  controlAffinity:
-                                                      ListTileControlAffinity
-                                                          .leading,
-                                                  title: Text(
-                                                    'Saya tidak mengalami kondisi plasenta Previa (plasenta menutupi jalan lahir)',
-                                                    style: TextStyle(
-                                                      fontSize:
-                                                          MediaQuery.of(context)
-                                                                  .size
-                                                                  .width *
-                                                              0.04,
-                                                    ),
-                                                  ),
-                                                  value: value3,
-                                                  onChanged: (bool? value) {
-                                                    setState(() {
-                                                      value3 = value!;
-                                                    });
-                                                  },
-                                                ),
-                                                CheckboxListTile(
-                                                  dense: true,
-                                                  activeColor: Colors.blue,
-                                                  contentPadding:
-                                                      EdgeInsets.zero,
-                                                  controlAffinity:
-                                                      ListTileControlAffinity
-                                                          .leading,
-                                                  title: Text(
-                                                    'Saya tidak memiliki penyakit khusus',
-                                                    style: TextStyle(
-                                                      fontSize:
-                                                          MediaQuery.of(context)
-                                                                  .size
-                                                                  .width *
-                                                              0.04,
-                                                    ),
-                                                  ),
-                                                  value: value4,
-                                                  onChanged: (bool? value) {
-                                                    setState(() {
-                                                      value4 = value!;
-                                                    });
-                                                  },
-                                                ),
-                                              ],
-                                            );
-                                          },
-                                        ),
+                                        title: 'Warning',
+                                        desc:
+                                            "Nomor sudah terdaftar mom, silahkan login.",
                                         buttons: [
                                           DialogButton(
-                                            onPressed: () {
-                                              if (value1 &&
-                                                  value2 &&
-                                                  value3 &&
-                                                  value4) {
-                                                Navigator.of(context).pop();
-                                                Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (context) =>
-                                                        ChatBot(
-                                                            phoneNo: _phone
-                                                                .value.text,
-                                                            aksi: 'register'),
-                                                  ),
-                                                );
-                                              }
-                                            },
+                                            onPressed: () =>
+                                                Navigator.pop(context),
                                             color: Colors.blue,
                                             child: const Text(
-                                              'LANJUT',
+                                              "Oke",
                                               style: TextStyle(
                                                   color: Colors.white,
                                                   fontSize: 20),
                                             ),
-                                          ),
+                                          )
+                                        ],
+                                      ).show();
+                                    } else {
+                                      Alert(
+                                        context: context,
+                                        type: AlertType.error,
+                                        style: alertStyle,
+                                        title: 'Error',
+                                        desc: "Tidak dapat terhubung dengan server",
+                                        buttons: [
+                                          DialogButton(
+                                            onPressed: () => Navigator.pop(context),
+                                            color: Colors.blue,
+                                            child: const Text(
+                                              "Oke",
+                                              style: TextStyle(color: Colors.white, fontSize: 20),
+                                            ),
+                                          )
                                         ],
                                       ).show();
                                     }
-                                  } else if (res == 409) {
-                                    Alert(
-                                      context: context,
-                                      type: AlertType.warning,
-                                      style: alertStyle,
-                                      title: 'Warning',
-                                      desc:
-                                          "Nomor sudah terdaftar mom, silahkan login.",
-                                      buttons: [
-                                        DialogButton(
-                                          onPressed: () =>
-                                              Navigator.pop(context),
-                                          color: Colors.blue,
-                                          child: const Text(
-                                            "Oke",
-                                            style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 20),
-                                          ),
-                                        )
-                                      ],
-                                    ).show();
                                   }
+                                  
                                 }
                               }
                               return;
@@ -437,5 +283,221 @@ class _RegisterState extends State<Register> {
                     ],
                   ))));
     });
+  }
+
+  void _alertPertama(BuildContext context){
+    Alert(
+        context: context,
+        style: alertStyle1,
+        title:
+            'Apakah mom sudah mendapatkan izin dari dokter untuk melakukan senam yoga ibu hamil?',
+        content: StatefulBuilder(
+          builder: (BuildContext context,
+              StateSetter setState) {
+            return Column(
+              children: [
+                const SizedBox(height: 10,),
+                Column(
+                  children: [
+                    FractionallySizedBox(
+                      widthFactor: 0.8,
+                      child: DialogButton(
+                        onPressed: () {
+                            _alertKedua(context);
+                        },
+                        radius: const BorderRadius.all(Radius.circular(20)),
+                        color: Colors.blue,
+                        child: const Text(
+                          'Sudah',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 20),
+                        ),
+                      ),
+                    ),
+                  FractionallySizedBox(
+                    widthFactor: 0.8,
+                    child: DialogButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                ChatBot(
+                                    phoneNo: _phone
+                                        .value.text,
+                                    aksi: 1),
+                          ),
+                        );
+                      },
+                      color: Colors.white,
+                      radius: const BorderRadius.all(Radius.circular(20)),
+                      border: Border.all(color: Colors.blue),
+                      child: const Text(
+                        'Belum',
+                        style: TextStyle(
+                            color: Colors.blue,
+                            fontSize: 20),
+                      ),
+                    ),
+                  )
+                    ],
+                  )
+              ],
+            );
+          },
+        ),
+        buttons: []
+      ).show();
+  }
+
+  void _alertKedua(BuildContext context){
+      Alert(
+                              context: context,
+                              style: alertStyle,
+                              title:
+                                  'Sebelum mendaftar mom perlu menyetujui pernyataan dibawah ini',
+                              content: StatefulBuilder(
+                                builder: (BuildContext context,
+                                    StateSetter setState) {
+                                  return Column(
+                                    children: [
+                                      CheckboxListTile(
+                                        dense: true,
+                                        activeColor: Colors.blue,
+                                        contentPadding:
+                                            EdgeInsets.zero,
+                                        controlAffinity:
+                                            ListTileControlAffinity
+                                                .leading,
+                                        title: Text(
+                                          'Saya sudah konsultasi dan mendapatkan izin dari dokter kandungan',
+                                          style: TextStyle(
+                                            fontSize:
+                                                MediaQuery.of(context)
+                                                        .size
+                                                        .width *
+                                                    0.04,
+                                          ),
+                                        ),
+                                        value: value1,
+                                        onChanged: (bool? value) {
+                                          setState(() {
+                                            value1 = value!;
+                                          });
+                                        },
+                                      ),
+                                      CheckboxListTile(
+                                        dense: true,
+                                        activeColor: Colors.blue,
+                                        contentPadding:
+                                            EdgeInsets.zero,
+                                        controlAffinity:
+                                            ListTileControlAffinity
+                                                .leading,
+                                        title: Text(
+                                          'Saya tidak mempunyai riwayat flek/pendarahan selama kehamilan',
+                                          style: TextStyle(
+                                            fontSize:
+                                                MediaQuery.of(context)
+                                                        .size
+                                                        .width *
+                                                    0.04,
+                                          ),
+                                        ),
+                                        value: value2,
+                                        onChanged: (bool? value) {
+                                          setState(() {
+                                            value2 = value!;
+                                          });
+                                        },
+                                      ),
+                                      CheckboxListTile(
+                                        dense: true,
+                                        activeColor: Colors.blue,
+                                        contentPadding:
+                                            EdgeInsets.zero,
+                                        controlAffinity:
+                                            ListTileControlAffinity
+                                                .leading,
+                                        title: Text(
+                                          'Saya tidak mengalami kondisi plasenta Previa (plasenta menutupi jalan lahir)',
+                                          style: TextStyle(
+                                            fontSize:
+                                                MediaQuery.of(context)
+                                                        .size
+                                                        .width *
+                                                    0.04,
+                                          ),
+                                        ),
+                                        value: value3,
+                                        onChanged: (bool? value) {
+                                          setState(() {
+                                            value3 = value!;
+                                          });
+                                        },
+                                      ),
+                                      CheckboxListTile(
+                                        dense: true,
+                                        activeColor: Colors.blue,
+                                        contentPadding:
+                                            EdgeInsets.zero,
+                                        controlAffinity:
+                                            ListTileControlAffinity
+                                                .leading,
+                                        title: Text(
+                                          'Saya tidak memiliki penyakit khusus',
+                                          style: TextStyle(
+                                            fontSize:
+                                                MediaQuery.of(context)
+                                                        .size
+                                                        .width *
+                                                    0.04,
+                                          ),
+                                        ),
+                                        value: value4,
+                                        onChanged: (bool? value) {
+                                          setState(() {
+                                            value4 = value!;
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                              buttons: [
+                                DialogButton(
+                                  onPressed: () {
+                                    if (value1 &&
+                                        value2 &&
+                                        value3 &&
+                                        value4) {
+                                      Navigator.of(context).pop();
+                                      Navigator.of(context).pop();
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              OTP(
+                                                  phoneNo: _phone
+                                                      .value.text,
+                                                  aksi: 1, email: '',),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  color: Colors.blue,
+                                  child: const Text(
+                                    'LANJUT',
+                                    style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 20),
+                                  ),
+                                ),
+                              ],
+                            ).show();
+                        
   }
 }

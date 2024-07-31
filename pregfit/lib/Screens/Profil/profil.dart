@@ -1,12 +1,9 @@
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:pregfit/Config/config.dart';
+import 'package:pregfit/Controller/api_controller.dart';
 import 'package:pregfit/Screens/CustomIcons/custom_icons_icons.dart';
 import 'package:pregfit/Screens/Menu/menu.dart';
 import 'package:pregfit/Screens/Onboarding/onboarding.dart';
-import 'package:pregfit/Screens/Pengingat/alarm.dart';
 import 'package:pregfit/Screens/Pengingat/pengingat.dart';
 import 'package:pregfit/Screens/Profil/Tentang/tentang.dart';
 import 'package:pregfit/Screens/Profil/UbahProfil/ubah_profil.dart';
@@ -25,8 +22,7 @@ class _ProfilState extends State<Profil> {
   String? _nama;
   String _noHp = "+628xxxxxxxxxx";
   String _trimester = "Trimester Pertama";
-
-  final client = HttpClient();
+  APIController apiController = APIController();
 
   var alertStyle = const AlertStyle(
       animationType: AnimationType.fromTop,
@@ -49,76 +45,10 @@ class _ProfilState extends State<Profil> {
         MaterialPageRoute(builder: (context) => const Menu(index: 0))));
   }
 
-  Future<dynamic> getUser() async {
-    // var token = box.read('token');
-    var token = "test";
-    try {
-      final request =
-          await client.getUrl(Uri.parse("${Config.baseURL}/api/users"));
-      request.headers.set(
-          HttpHeaders.contentTypeHeader, "application/json; charset=UTF-8");
-      request.headers.set(HttpHeaders.authorizationHeader, "Bearer $token");
-
-      final response = await request.close();
-
-      if (response.statusCode == 200) {
-        return jsonDecode(await response.transform(utf8.decoder).join());
-      } else if (response.statusCode == 401) {
-        // _signOut();
-        // Navigator.pushReplacement(context,
-        //     MaterialPageRoute(builder: (context) => const Onboarding()));
-      }
-    } catch (e) {
-      if (e is SocketException) {
-        // Handle the SocketException (e.g., display an error message)
-        print('Network error: ${e.message}');
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
-        }
-      } else {
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
-        }
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
-        future: getUser(),
+        future: apiController.getUser(context),
         builder: (context, snapshot) {
           if (snapshot.hasData) {
             _nama = snapshot.data['nama'] ?? 'Mom`s Preg-Fit';
@@ -162,6 +92,7 @@ class _ProfilState extends State<Profil> {
                         left: Adaptive.w(4), right: Adaptive.w(4)),
                     alignment: Alignment.center,
                     child: ListView(
+                      shrinkWrap: true,
                       children: [
                         SizedBox(
                           height: Adaptive.h(2),
@@ -241,7 +172,7 @@ class _ProfilState extends State<Profil> {
                                                         FittedBox(
                                                           fit: BoxFit.fitWidth,
                                                           child: Text(
-                                                            '+$_noHp',
+                                                            _noHp,
                                                             style:
                                                                 const TextStyle(
                                                               fontFamily:
@@ -311,8 +242,8 @@ class _ProfilState extends State<Profil> {
                         SizedBox(
                           height: Adaptive.h(1),
                         ),
-                        Container(
-                          // height: Adaptive.h(35),
+                      Container(
+                          height: Adaptive.h(40),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(5),
                             boxShadow: const [
@@ -381,6 +312,56 @@ class _ProfilState extends State<Profil> {
                                                                 builder:
                                                                     (context) =>
                                                                         const UbahProfil()));
+                                                      },
+                                                      icon: Image.asset(
+                                                        'assets/icons/arrow.png',
+                                                      ),
+                                                      iconSize: Adaptive.h(3),
+                                                    )),
+                                              ],
+                                            )),
+                                        const Divider(
+                                          color: Colors.black,
+                                          thickness: 1.3,
+                                        ),
+                                        GestureDetector(
+                                            onTap: () {
+                                              Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                      builder: (context) =>
+                                                          const Pengingat()));
+                                            },
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                    flex: 2,
+                                                    child: SizedBox(
+                                                      height: Adaptive.h(3),
+                                                      child: Image.asset(
+                                                        'assets/icons/clock.png',
+                                                      ),
+                                                    )),
+                                                const Expanded(
+                                                    flex: 8,
+                                                    child: Text('Pengingat',
+                                                        style: TextStyle(
+                                                            fontFamily:
+                                                                'DMSans',
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color: Colors.white,
+                                                            fontSize: 17.5))),
+                                                Expanded(
+                                                    flex: 1,
+                                                    child: IconButton(
+                                                      onPressed: () {
+                                                        Navigator.push(
+                                                            context,
+                                                            MaterialPageRoute(
+                                                                builder:
+                                                                    (context) =>
+                                                                        const Pengingat()));
                                                       },
                                                       icon: Image.asset(
                                                         'assets/icons/arrow.png',
@@ -478,8 +459,11 @@ class _ProfilState extends State<Profil> {
                                                     "\nMom yakin ingin keluar?\n Jangan lupa mampir ke Preg-Fit lagi ya :)",
                                                 buttons: [
                                                   DialogButton(
-                                                    onPressed: () {
+                                                    onPressed: () async {
+                                                      apiController.signOut();
                                                       SystemNavigator.pop();
+                                                      Navigator.pushReplacement(
+                                                        context, MaterialPageRoute(builder: (context) => const Onboarding()));
                                                     },
                                                     color: Colors.blue,
                                                     radius:
@@ -703,7 +687,7 @@ class _ProfilState extends State<Profil> {
                         ),
                         Container(
                           alignment: Alignment.bottomCenter,
-                          child: const Text('Version 1.0',
+                          child: const Text('Version 2.0',
                               style: TextStyle(
                                   fontFamily: 'DMSans',
                                   fontWeight: FontWeight.w600,
@@ -1304,8 +1288,12 @@ class _ProfilState extends State<Profil> {
                           padding: const EdgeInsets.only(
                               top: 10, bottom: 10, left: 20, right: 15),
                           alignment: Alignment.bottomCenter,
-                          child: SizedBox(
-                            child: Image.asset('assets/icons/Version.png'),
+                          child: const Text('Version 2.0',
+                              style: TextStyle(
+                                  fontFamily: 'DMSans',
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black,
+                                  fontSize: 21)
                           ),
                         ),
                       ],

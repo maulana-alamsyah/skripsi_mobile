@@ -1,9 +1,8 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:pregfit/Config/config.dart';
+import 'package:pregfit/Controller/api_controller.dart';
 import 'package:pregfit/Screens/Camera/camera_trimester1.dart';
 import 'package:pregfit/Screens/Camera/camera_trimester2.dart';
 import 'package:pregfit/Screens/Camera/camera_trimester3.dart';
@@ -11,6 +10,7 @@ import 'package:rflutter_alert/rflutter_alert.dart';
 import 'package:responsive_sizer/responsive_sizer.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:camera/camera.dart';
+import 'package:easy_loading_button/easy_loading_button.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -23,6 +23,8 @@ class _HomeState extends State<Home> {
   String _name = "Pilih Trimester";
 
   final client = HttpClient();
+  APIController apiController = APIController();
+  Future<dynamic>? _checkTokenFuture;
 
   var alertStyle = const AlertStyle(
       animationType: AnimationType.fromTop,
@@ -40,120 +42,11 @@ class _HomeState extends State<Home> {
       alertElevation: 0,
       alertAlignment: Alignment.center);
 
-  Future<dynamic> checkToken() async {
-    // var token = box.read('token');
-    var token = "test";
-
-    try {
-      final request =
-          await client.getUrl(Uri.parse("${Config.baseURL}/api/check_token"));
-      request.headers.set(
-          HttpHeaders.contentTypeHeader, "application/json; charset=UTF-8");
-      request.headers.set(HttpHeaders.authorizationHeader, "Bearer $token");
-
-      final response = await request.close();
-
-      if (response.statusCode == 200) {
-        return jsonDecode(await response.transform(utf8.decoder).join());
-      } else if (response.statusCode == 401) {
-        // _signOut();
-        // Navigator.pushReplacement(context,
-        //     MaterialPageRoute(builder: (context) => const Onboarding()));
-      }
-    } catch (e) {
-      if (e is SocketException) {
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
-        }
-      } else {
-        if (mounted) {
-          Alert(
-            context: context,
-            type: AlertType.error,
-            style: alertStyle,
-            title: 'Error',
-            desc: "Tidak dapat terhubung dengan server",
-            buttons: [
-              DialogButton(
-                onPressed: () => Navigator.pop(context),
-                color: Colors.blue,
-                child: const Text(
-                  "Oke",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              )
-            ],
-          ).show();
-        }
-      }
-    }
-  }
-
-  Future<dynamic> addHistory(String jenisYoga) async {
-    String waktu;
-    if (jenisYoga == 'Trimester 1') {
-      waktu = '2 Menit';
-    } else if (jenisYoga == 'Trimester 2') {
-      waktu = '4 Menit';
-    } else {
-      waktu = '6 Menit';
-    }
-    try {
-      // var token = box.read('token');
-      var token = "test";
-      final tanggal = DateFormat("dd/MM/yyyy", "id_ID").format(DateTime.now());
-      final request =
-          await client.postUrl(Uri.parse("${Config.baseURL}:5000/api/history"));
-      request.headers.set(
-          HttpHeaders.contentTypeHeader, "application/json; charset=UTF-8");
-      request.headers.set(HttpHeaders.authorizationHeader, "Bearer $token");
-      final requestBodyBytes = utf8.encode(json.encode({
-        'tanggal': tanggal,
-        'waktu': waktu,
-        'jenis_yoga': jenisYoga,
-      }));
-      print(json.encode({
-        'tanggal': tanggal,
-        'waktu': waktu,
-        'jenis_yoga': jenisYoga,
-      }));
-
-      request.headers.set('Content-Length', requestBodyBytes.length.toString());
-      request.write(json.encode({
-        'tanggal': tanggal,
-        'waktu': waktu,
-        'jenis_yoga': jenisYoga,
-      }));
-
-      final response = await request.close();
-
-      if (response.statusCode == 200) {
-        return true;
-      } else if (response.statusCode == 401) {
-        return false;
-      }
-    } catch (e) {
-      if (e is SocketException) {
-        // Handle the SocketException (e.g., display an error message)
-        print('Network error: ${e.message}');
-      } else {}
-    }
+  @override
+  void initState() {
+    super.initState();
+    _checkTokenFuture = apiController.checkToken(context);
+    apiController.getUserInfo();
   }
 
   Future<bool> _onWillPop() async {
@@ -229,7 +122,7 @@ class _HomeState extends State<Home> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
-        future: checkToken(),
+        future: _checkTokenFuture,
         builder: (context, snapshot) {
           if (snapshot.hasData) {
             return PopScope(
@@ -584,8 +477,8 @@ class _HomeState extends State<Home> {
                                                                       () async {
                                                                     if (_name ==
                                                                         'Trimester 1') {
-                                                                      // await AddHistory(
-                                                                      //     _name);
+                                                                      await apiController.addHistory(
+                                                                          _name);
                                                                       await availableCameras().then((value) => Navigator.push(
                                                                           context,
                                                                           MaterialPageRoute(
@@ -595,8 +488,8 @@ class _HomeState extends State<Home> {
                                                                                   ))));
                                                                     } else if (_name ==
                                                                         'Trimester 2') {
-                                                                      // await AddHistory(
-                                                                      //     _name);
+                                                                      await apiController.addHistory(
+                                                                          _name);
                                                                       await availableCameras().then((value) => Navigator.push(
                                                                           context,
                                                                           MaterialPageRoute(
@@ -606,8 +499,8 @@ class _HomeState extends State<Home> {
                                                                                   ))));
                                                                     } else if (_name ==
                                                                         'Trimester 3') {
-                                                                      // await AddHistory(
-                                                                      //     _name);
+                                                                      await apiController.addHistory(
+                                                                          _name);
                                                                       await availableCameras().then((value) => Navigator.push(
                                                                           context,
                                                                           MaterialPageRoute(
@@ -618,6 +511,7 @@ class _HomeState extends State<Home> {
                                                                     }
                                                                   },
                                                                   style: ElevatedButton.styleFrom(
+                                                                    backgroundColor: Colors.blue,
                                                                       shape: RoundedRectangleBorder(
                                                                           borderRadius:
                                                                               BorderRadius.circular(20))),
@@ -1060,11 +954,7 @@ class Trimester1Popup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: SingleChildScrollView(
+    return SingleChildScrollView(
         child: Column(
           children: <Widget>[
             const Padding(
@@ -1100,17 +990,35 @@ class Trimester1Popup extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            ElevatedButton(
+            EasyButton(
+              type: EasyButtonType.elevated,
               onPressed: () {
                 Navigator.of(context).pop();
                 Navigator.of(context).pop();
               },
-              child: const Text('Mengerti'),
+              loadingStateWidget: const CircularProgressIndicator(
+                strokeWidth: 3.0,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  Colors.white,
+                ),
+              ),
+              useEqualLoadingStateWidgetDimension: true,
+              useWidthAnimation: true,
+              height: MediaQuery.of(context).size.height * 0.05,
+              borderRadius: 20,
+              buttonColor: Colors.blue,
+              contentGap: 6.0,
+              idleStateWidget: const Text(
+                'Mengerti',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontFamily: 'DMSans'),
+              ),
             ),
             const SizedBox(height: 20),
           ],
         ),
-      ),
     );
   }
 }
@@ -1120,11 +1028,7 @@ class Trimester2Popup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: SingleChildScrollView(
+    return SingleChildScrollView(
         child: Column(
           children: <Widget>[
             const Padding(
@@ -1182,17 +1086,35 @@ class Trimester2Popup extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            ElevatedButton(
+            EasyButton(
+              type: EasyButtonType.elevated,
               onPressed: () {
                 Navigator.of(context).pop();
                 Navigator.of(context).pop();
               },
-              child: const Text('Mengerti'),
+              loadingStateWidget: const CircularProgressIndicator(
+                strokeWidth: 3.0,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  Colors.white,
+                ),
+              ),
+              useEqualLoadingStateWidgetDimension: true,
+              useWidthAnimation: true,
+              height: MediaQuery.of(context).size.height * 0.05,
+              borderRadius: 20,
+              buttonColor: Colors.blue,
+              contentGap: 6.0,
+              idleStateWidget: const Text(
+                'Mengerti',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontFamily: 'DMSans'),
+              ),
             ),
             const SizedBox(height: 20),
           ],
         ),
-      ),
     );
   }
 }
@@ -1202,11 +1124,7 @@ class Trimester3Popup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: SingleChildScrollView(
+    return SingleChildScrollView(
         child: Column(
           children: <Widget>[
             const Padding(
@@ -1286,17 +1204,35 @@ class Trimester3Popup extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            ElevatedButton(
+            EasyButton(
+              type: EasyButtonType.elevated,
               onPressed: () {
                 Navigator.of(context).pop();
                 Navigator.of(context).pop();
               },
-              child: const Text('Mengerti'),
+              loadingStateWidget: const CircularProgressIndicator(
+                strokeWidth: 3.0,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  Colors.white,
+                ),
+              ),
+              useEqualLoadingStateWidgetDimension: true,
+              useWidthAnimation: true,
+              height: MediaQuery.of(context).size.height * 0.05,
+              borderRadius: 20,
+              buttonColor: Colors.blue,
+              contentGap: 6.0,
+              idleStateWidget: const Text(
+                'Mengerti',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontFamily: 'DMSans'),
+              ),
             ),
             const SizedBox(height: 20),
           ],
         ),
-      ),
     );
   }
 }

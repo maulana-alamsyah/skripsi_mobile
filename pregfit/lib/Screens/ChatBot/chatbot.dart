@@ -1,19 +1,17 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 import 'package:pregfit/Config/config.dart';
 import 'package:pregfit/Screens/OTP/otp.dart';
 import 'package:responsive_sizer/responsive_sizer.dart';
 import 'package:flutter_chat_ui/flutter_chat_ui.dart';
 import 'package:flutter_chat_types/flutter_chat_types.dart' as types;
 import 'dart:convert';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:rflutter_alert/rflutter_alert.dart';
 
 class ChatBot extends StatefulWidget {
   final String phoneNo;
-  final String aksi;
+  final int aksi;
   const ChatBot({
     super.key,
     required this.phoneNo,
@@ -25,7 +23,7 @@ class ChatBot extends StatefulWidget {
 }
 
 class _ChatBotState extends State<ChatBot> {
-  List<types.Message> _messages = [];
+  final List<types.Message> _messages = [];
   final _user = types.User(id: UniqueKey().toString());
   final _bot = types.User(
       id: UniqueKey().toString(), firstName: "Belly", lastName: "Bot");
@@ -57,7 +55,7 @@ class _ChatBotState extends State<ChatBot> {
     currentQ = 1;
     _handleBotMessage(const types.PartialText(
         text:
-            'Hallo kenalin mom, aku belly bot. Selanjutnya belly akan minta mom untuk jawab pertanyaan dari belly secara jujur sesuai dg kondisi mom yaa. apakah mom sudah siap?'));
+            'Halo Mom! Kenalin, aku Belly Bot 😊. Belly akan bantu Mom dengan beberapa pertanyaan untuk mengetahui kondisi Mom. Jawab dengan jujur dan jelas yaa. Jangan lupa, jawaban dari Belly Bot hanya sebagai panduan awal. Mom tetap perlu berkonsultasi dengan dokter untuk memastikan apakah Mom dapat melakukan senam yoga mandiri dengan aman. Apakah Mom sudah siap?'));
   }
 
   void _handleBotMessage(types.PartialText message) {
@@ -86,7 +84,7 @@ class _ChatBotState extends State<ChatBot> {
     currentQ++;
     _users.remove(_bot);
     _handleBotMessage(types.PartialText(text: response));
-    print(res['value']);
+    // print(res['value']);
     setState(() {
       roomChatStatus = res['value'];
     });
@@ -105,20 +103,9 @@ class _ChatBotState extends State<ChatBot> {
   }
 
   void _addMessage(types.Message message) {
-    print("Adding message: $message");
+    debugPrint("Adding message: $message");
     setState(() {
       _messages.insert(0, message);
-    });
-  }
-
-  void _loadMessages() async {
-    final response = await rootBundle.loadString('assets/chat/messages.json');
-    final messages = (jsonDecode(response) as List)
-        .map((e) => types.Message.fromJson(e as Map<String, dynamic>))
-        .toList();
-
-    setState(() {
-      _messages = messages;
     });
   }
 
@@ -136,8 +123,6 @@ class _ChatBotState extends State<ChatBot> {
 
       var responseBody =
           json.decode(await response.transform(utf8.decoder).join());
-
-      print(responseBody);
 
       return responseBody;
     } catch (e) {
@@ -192,8 +177,17 @@ class _ChatBotState extends State<ChatBot> {
           toolbarHeight: Adaptive.h(8.7),
           title: Container(
               padding: const EdgeInsets.only(left: 5),
-              child:
-                  Image.asset('assets/icons/logo.png', width: Adaptive.w(30))),
+               child: Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Image.asset(
+                      'assets/icons/logo.png',
+                      width: Adaptive.w(30),
+                    ),
+                  ],
+                ),
+              ),
           titleSpacing: 5,
           elevation: 2,
           backgroundColor: Colors.white,
